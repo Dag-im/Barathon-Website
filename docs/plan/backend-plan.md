@@ -623,7 +623,7 @@ Office
   openingHours jsonb NULL ([{days:'Mon-Fri', open:'08:30', close:'17:30'}]), subsidiaryId NULL FK Subsidiary, sortOrder, visible, createdAt, updatedAt
 
 SocialLink
-  id, platform SocialPlatform UNIQUE-per-platform? (NO - multiple allowed), url varchar(500) NULL, label varchar(60) NULL,
+  id, platform SocialPlatform (multiple rows per platform allowed), url varchar(500) NULL, label varchar(60) NULL,
   showInFooter default true, showOnContactPage default true, sortOrder, visible default false until url set (service enforces: cannot be visible without url)
 
 Menu
@@ -776,7 +776,7 @@ Video
   youtubeId char(11) NOT NULL, startSeconds int NULL, sourceUrl varchar(500) NOT NULL (as entered),
   thumbnailMediaId NULL, brandId NULL FK Brand SET NULL, productId NULL FK Product SET NULL,
   isFeatured boolean default false, sortOrder, status, publishedAt, version, createdAt, updatedAt, deletedAt
-  INDEX (status, isFeatured, sortOrder), UNIQUE (youtubeId, brandId) NULLS NOT DISTINCT? -> use plain INDEX(youtubeId) (duplicates warned, not blocked)
+  INDEX (status, isFeatured, sortOrder), INDEX (youtubeId) (duplicates produce a warning, not an error)
 
 Subsidiary
   id, name varchar(120) NOT NULL ('Baraton Trade LLC'), slug citext UNIQUE, legalName varchar(200) NULL, kind varchar(20) ('LLC'|'PLC'|'OTHER'),
@@ -824,7 +824,7 @@ ContactMessage
   consentGiven boolean NULL, locale varchar(5) default 'en',
   status MessageStatus default NEW, isStarred boolean default false,
   spamScore smallint default 0, spamReasons text[] default '{}',
-  ip inet NULL (stored truncated? NO: stored full; purged to /24 after 90 days by job), userAgent varchar(400) NULL,
+  ip inet NULL (stored in full; truncated to /24 after 90 days by job), userAgent varchar(400) NULL,
   readAt NULL, repliedAt NULL, handledById NULL FK User, archivedAt NULL, notificationStatus varchar(12) default 'PENDING' ('PENDING'|'SENT'|'FAILED'),
   createdAt, updatedAt
   INDEX (status, createdAt DESC), INDEX (isStarred), INDEX (email), GIN full-text on name||email||message
@@ -1123,14 +1123,14 @@ Reasons: (1) every image must be decoded, validated, re-encoded and turned into 
 ## 5.3 Object key naming
 
 ```
-public-media/media/{yyyy}/{mm}/{mediaId}/original.{ext}
-public-media/media/{yyyy}/{mm}/{mediaId}/w{width}.{webp|avif}      e.g. w640.webp, w1280.avif
-public-media/media/{yyyy}/{mm}/{mediaId}/thumb.webp                  (400 px wide, used by admin library)
-public-media/media/{yyyy}/{mm}/{mediaId}/{slugified-original-name}.pdf   (documents: readable name for download; id folder guarantees uniqueness)
-private-docs/docs/{yyyy}/{mm}/{mediaId}/{slugified-original-name}.pdf
+public-media/media/{yyyy}/{mm}/{mediaId}/v1/original.{ext}
+public-media/media/{yyyy}/{mm}/{mediaId}/v1/w{width}.{webp|avif}      e.g. w640.webp, w1280.avif
+public-media/media/{yyyy}/{mm}/{mediaId}/v1/thumb.webp                  (400 px wide, used by admin library)
+public-media/media/{yyyy}/{mm}/{mediaId}/v1/{slugified-original-name}.pdf   (documents: readable name for download; id folder guarantees uniqueness)
+private-docs/docs/{yyyy}/{mm}/{mediaId}/v1/{slugified-original-name}.pdf
 private-docs/exports/{iso-timestamp}-{userId}.json
 ```
-`mediaId` is the UUID v7 of the `Media` row (so keys are unguessable and immutable; replacing a file creates a new `mediaId` folder... NO: replacing keeps `mediaId` but writes to a new versioned folder `{mediaId}/v{n}/...` and updates `objectKey`/variants, because URLs must change for cache busting; old objects are removed after success). Final: key pattern is `media/{yyyy}/{mm}/{mediaId}/v{n}/...`, `n` starts at 1.
+`mediaId` is the UUID v7 of the `Media` row (so keys are unguessable; replacing a file keeps `mediaId` but writes to a new versioned folder `{mediaId}/v{n}/...` and updates `objectKey`/variants, because URLs must change for cache busting; old objects are removed after success). Final key pattern: `media/{yyyy}/{mm}/{mediaId}/v{n}/...`, `n` starts at 1.
 
 ## 5.4 Allowed types and sizes
 
@@ -1167,3 +1167,1122 @@ Everything else -> `415 UNSUPPORTED_MEDIA_TYPE`. Client-declared MIME mismatchin
 | `media-orphans` | daily 03:30 | (a) Media rows with zero `MediaRef` and `createdAt < now-7d` and not in library folders flagged `keep`: reported (NOT deleted automatically) in `GET /admin/media?unused=true` and dashboard card; (b) MinIO objects under `public-media/media/` with no matching `Media`/`MediaVariant.objectKey` older than 24 h are deleted (listing by prefix per day); (c) `Media` rows soft-deleted > 30 d are purged with objects. |
 | `purge-trash` | daily 03:00 | Hard-delete soft-deleted content older than 30 d (incl. their MediaRef rows). |
 Upload failure handling: object writes occur before the DB row; on DB failure the API deletes written objects (compensating action); on object-write failure nothing is persisted.
+
+---
+
+# 6. REST API specification
+
+Base: `https://<domain>/api/v1`. JSON UTF-8. Dates ISO-8601 UTC. IDs UUID v7.
+
+## 6.1 Conventions
+
+### 6.1.1 Versioning and docs
+- URI version `/api/v1`. Breaking changes => `/api/v2` side by side. Non-breaking additions allowed in v1.
+- OpenAPI 3.1 generated from decorators (`@ApiTags`, `@ApiOperation`, DTO schemas via Swagger CLI plugin). JSON at `/api/v1/openapi.json`; UI at `/api/docs` (dev + when `SWAGGER_ENABLED=true`). CI step regenerates the spec and fails on diff vs the committed `apps/api/openapi.snapshot.json` (contract guard).
+- Tags: `public-*`, `admin-*`, `auth`, `health`.
+
+### 6.1.2 Pagination (lists)
+Query: `page` (default 1, min 1), `pageSize` (default 20, max 100). Response envelope:
+```json
+{ "data": [ ... ], "meta": { "page": 1, "pageSize": 20, "total": 57, "totalPages": 3 } }
+```
+Single resources return the object directly (no envelope) — `{ ... }`. Non-paginated small collections (menus, categories, brands for marquee, settings) return `{ "data": [...] }` without `meta`.
+
+### 6.1.3 Filtering, sorting, search
+- `q` = free-text (admin lists: ILIKE on title/name; public product list: FTS).
+- `sort` = comma list of fields, `-` prefix for descending, whitelist per resource, e.g. `sort=-publishedAt,title`. Default per resource documented below.
+- Admin list common filters: `status` (CSV of `ContentStatus`), `deleted=true` (trash view), `createdFrom`, `createdTo`, resource-specific filters.
+- Unknown query params => 400 `VALIDATION_FAILED` (forbidNonWhitelisted).
+- Field selection: not supported (YAGNI).
+
+### 6.1.4 Error format (all errors)
+```json
+{
+  "statusCode": 422,
+  "code": "VALIDATION_FAILED",
+  "message": "Validation failed",
+  "details": [ { "field": "email", "message": "email must be an email", "code": "isEmail" } ],
+  "requestId": "01JD...",
+  "timestamp": "2026-11-27T10:00:00.000Z",
+  "path": "/api/v1/public/contact"
+}
+```
+Status/code catalogue: 400 `BAD_REQUEST`, `UNSUPPORTED_LOCALE`, `INVALID_YOUTUBE_URL`, `RESET_TOKEN_INVALID`; 401 `UNAUTHENTICATED`, `INVALID_CREDENTIALS`, `TOKEN_EXPIRED`, `REFRESH_INVALID`, `REFRESH_REUSE`, `REFRESH_RACE`; 403 `FORBIDDEN`, `CSRF_INVALID`, `ORIGIN_REQUIRED`, `PASSWORD_CHANGE_REQUIRED`, `TWO_FA_SETUP_REQUIRED`, `CAPTCHA_FAILED`; 404 `NOT_FOUND`; 409 `SLUG_TAKEN`, `SLUG_RESERVED`, `VERSION_CONFLICT`, `MEDIA_IN_USE`, `REDIRECT_LOOP`, `CONFLICT`, `SYSTEM_RESOURCE_PROTECTED`; 413 `PAYLOAD_TOO_LARGE`; 415 `UNSUPPORTED_MEDIA_TYPE`; 422 `VALIDATION_FAILED`, `BLOCK_INVALID`, `HTML_REJECTED` (only when sanitize empties a required field); 423 `ACCOUNT_LOCKED`; 429 `RATE_LIMITED`; 500 `INTERNAL`; 503 `NOT_READY`. Validation errors use HTTP 422 (not 400) with `details[]`.
+
+### 6.1.5 Caching headers (public API)
+- `Cache-Control: public, max-age=0, s-maxage=60, stale-while-revalidate=300` on all public GET; `private, no-store` on admin/auth; `ETag` (weak, hash of body) with `If-None-Match` => 304.
+- `Vary: Accept-Encoding`. Responses gzip/br compressed by the proxy.
+- Server-side in-process cache (`CacheService.wrap`) keyed by `url+locale`, TTL 60 s, invalidated by tags on content change (6.1.7).
+
+### 6.1.6 Admin write conventions
+- Create: `201` + full resource. Update (`PATCH`, partial; `PUT` only for settings/singletons/replace-lists): `200` + full resource. Delete: `204` (soft delete) ; purge: `204`.
+- Optimistic concurrency: body field `expectedVersion?: number`; `409 VERSION_CONFLICT` with `details:[{field:'version', current: N}]`.
+- All admin responses for content resources include `warnings: Warning[]` (non-blocking, e.g. missing alt, missing SEO description, broken references).
+- Common sub-routes for every publishable resource `R` (collection path `/admin/R`): see 6.3.0.
+- Idempotency: not required.
+
+### 6.1.7 Revalidation (API -> Next.js)
+- On any change affecting public output, a `content.changed` event enqueues `revalidate` job (debounced 2 s, coalescing tags/paths). Job `POST ${WEB_REVALIDATE_URL}` (e.g. `http://web:3000/api/revalidate`) with JSON `{ "tags": ["products","product:furukawa-rock-drills"], "paths": ["/products","/products/furukawa-rock-drills"], "ts": 1732700000 }` and headers `X-Revalidate-Signature: sha256=<HMAC_SHA256(REVALIDATE_SECRET, rawBody)>`, `X-Revalidate-Timestamp`. Next.js must reject if signature invalid or timestamp skew > 5 min. Retries: 5 attempts exponential (2 s, 10 s, 30 s, 2 min, 10 min); result in `RevalidationLog`. Failure never blocks the admin save.
+- Tag taxonomy (also usable by Next.js `fetch(..., {next:{tags}})`): `site` (settings, menus, contact info, social, ui strings), `menus`, `page:{slug}`, `pages`, `products`, `product:{slug}`, `categories`, `brands`, `brand:{slug}`, `services`, `service:{slug}`, `videos`, `posts`, `post:{slug}`, `testimonials`, `faqs`, `subsidiaries`, `leadership`, `timeline`, `stats`, `hero`, `redirects`, `sitemap`. Mapping entity -> tags is in `common/constants/revalidation-map.ts`: e.g. product change => `products, product:{slug}, sitemap, hero`(if featured), plus pages whose blocks reference products (`page:home`); brand change => `brands, brand:{slug}, products, page:home`; settings/menus/contact => `site` (and every page implicitly since header/footer are in `site`); slug change => both old and new slugs.
+- Public `GET` responses carry header `X-Cache-Tags: products,product:slug` (comma list) for frontend convenience.
+
+### 6.1.8 Preview (drafts)
+`POST /admin/preview {entityType, entityId}` -> `{ token, url }` where token is an HMAC-signed payload valid 30 min; Next.js draft-mode route calls `GET /public/preview/:entityType/:id?token=` which returns the same DTO as the public detail endpoint but ignoring `status`. `Cache-Control: no-store`.
+
+## 6.2 Public API (no auth, read-only except contact)
+
+All under `/api/v1/public`. Only PUBLISHED, not deleted, and (`scheduledAt` passed) content. `locale` query param optional (`en`). Common response additions: `seo` object (6.2.0).
+
+### 6.2.0 SEO object returned with page/detail/list-root resources
+```ts
+interface SeoDto {
+  title: string;                 // final <title>, template applied
+  description: string | null;
+  canonical: string;             // absolute URL
+  robots: string;                // e.g. "index,follow" | "noindex,nofollow"
+  openGraph: { title: string; description: string | null; type: 'website'|'article'|'product'; url: string; image: MediaDto | null; siteName: string; locale: string };
+  twitter: { card: 'summary' | 'summary_large_image'; title: string; description: string | null; image: string | null; site: string | null };
+  jsonLd: object[];              // overrides if set, else generated (Organization+WebSite on home, Product, BreadcrumbList, Article, FAQPage, LocalBusiness/Organization)
+}
+```
+
+### 6.2.1 Endpoint table
+
+| Method | Path | Description | Query | Response | Errors |
+|--------|------|-------------|-------|----------|--------|
+| GET | `/public/site` | Bootstrap for layout: settings, branding, header CTA, search config, footer text, credit, social links, contact channels, offices, menus (all locations, trees, dynamic items expanded), announcement, analytics IDs, maintenance, default SEO, ui strings map | `locale` | `SiteDto` | - |
+| GET | `/public/ui-strings` | Flat map of UI strings | `locale`, `group` | `{ data: Record<string,string> }` | - |
+| GET | `/public/menus` | All menus | - | `{ data: MenuDto[] }` | - |
+| GET | `/public/menus/:location` | One menu (`HEADER` etc.) | - | `MenuDto` | 404 |
+| GET | `/public/pages` | List published custom pages (slug, title, updatedAt) | - | `{data: PageSummaryDto[]}` | - |
+| GET | `/public/pages/:slug` | Page with blocks resolved; `slug` `home`, `about`, or custom | `locale` | `PageDto` | 404 |
+| GET | `/public/products` | Product list | `page,pageSize(<=48),q,category(slug),brand(slug),country(code),featured(bool),sort(order\|title\|-title\|-publishedAt)` default `sort=order` | `Paginated<ProductCardDto>` + `facets` | 400 |
+| GET | `/public/products/search` | Typeahead/search (header search box) | `q` (2..80 chars), `limit` (1..10, default 8) | `{ data: ProductSearchHitDto[] }` | 400 |
+| GET | `/public/products/:slug` | Product detail with images, specs, documents, related, brand, category, seo | - | `ProductDto` | 404 (+ redirect hint, 6.2.2) |
+| GET | `/public/products/:slug/documents/:documentId/download` | Increment counter, `302` to presigned/public URL with `Content-Disposition: attachment` | - | 302 | 404 |
+| GET | `/public/product-categories` | Category tree with product counts | - | `{data: CategoryDto[]}` | - |
+| GET | `/public/product-categories/:slug` | Category + seo | - | `CategoryDto` | 404 |
+| GET | `/public/brands` | Brands/partners (marquee + brands index) | `kind(PRINCIPAL\|PARTNER),page,pageSize(<=100),country` | `Paginated<BrandCardDto>` | - |
+| GET | `/public/brands/:slug` | Brand detail (the old "company detail"): description, videos, products | - | `BrandDto` | 404 |
+| GET | `/public/services` | Services list | - | `{data: ServiceCardDto[]}` | - |
+| GET | `/public/services/:slug` | Service detail with features | - | `ServiceDto` | 404 |
+| GET | `/public/videos` | Videos | `featured,brand(slug),page,pageSize(<=48)` | `Paginated<VideoDto>` | - |
+| GET | `/public/testimonials` | | `limit` | `{data: TestimonialDto[]}` | - |
+| GET | `/public/faqs` | FAQ groups with items | `group(slug)` | `{data: FaqGroupDto[]}` | - |
+| GET | `/public/posts` | News list | `page,pageSize(<=24),category(slug),tag(slug),q,sort(-publishedAt default)` | `Paginated<PostCardDto>` | - |
+| GET | `/public/posts/:slug` | News detail + prev/next + related | - | `PostDto` | 404 |
+| GET | `/public/post-categories` | | - | `{data: PostCategoryDto[]}` | - |
+| GET | `/public/subsidiaries` | | - | `{data: SubsidiaryDto[]}` | - |
+| GET | `/public/subsidiaries/:slug` | | - | `SubsidiaryDto` | 404 |
+| GET | `/public/leadership` | Primary leader message + team | - | `{ leader: LeaderMessageDto\|null, team: TeamMemberDto[] }` | - |
+| GET | `/public/timeline` | | - | `{data: TimelineEntryDto[]}` | - |
+| GET | `/public/stats` | | `group` | `{data: StatDto[]}` | - |
+| GET | `/public/search` | Global search across products, brands, services, posts, pages | `q` (2..80), `types` (CSV), `limit` (<=10 per type) | `{ products: [...], brands: [...], services: [...], posts: [...], pages: [...] }` | 400 |
+| POST | `/public/contact` | Submit contact form (see 7) | body `SubmitContactDto` | `201 { id, reference, message }` | 422, 429, 403 `CAPTCHA_FAILED` |
+| GET | `/public/redirects` | All enabled redirects (for Next.js middleware, cached) | - | `{ data: {source,target,type,match}[] }` | - |
+| GET | `/public/redirects/resolve` | Resolve a single path | `path` | `{ match:false } \| { match:true, target, type }` | - |
+| GET | `/public/sitemap` | URL set for `sitemap.xml` generation | - | `{ data: { loc: string; lastmod: string; changefreq: string; priority: number; images?: string[] }[] }` | - |
+| GET | `/public/sitemap.xml` | Ready XML (optional convenience; Next.js may proxy it) | - | `application/xml` | - |
+| GET | `/public/robots.txt` | Robots text built from settings + site noindex | - | `text/plain` | - |
+| GET | `/public/slugs/:type` | Slug lists for `generateStaticParams`: `type` in `products,brands,services,posts,pages,categories` | - | `{ data: {slug, updatedAt}[] }` | 404 |
+| GET | `/public/preview/:entityType/:id` | Draft preview with token | `token` | same DTO as detail | 401/403 |
+| GET | `/health/live`, `/health/ready` | Liveness / readiness (db, minio, jobs) | - | `{status:'ok', info:{...}}` | 503 |
+
+### 6.2.2 Slug redirect hint
+When a detail slug is unknown but a `Redirect` (auto or manual) matches the corresponding public path, the endpoint returns `404` with body `{ ..., "redirect": { "target": "/products/new-slug", "type": "MOVED_301" } }` so the frontend can `permanentRedirect`. (Primary mechanism remains Next middleware using `/public/redirects`.)
+
+### 6.2.3 Product list facets
+`facets: { categories: [{slug,name,count}], brands: [{slug,name,count}], countries: [{code,name,count}] }` computed on the filtered-without-that-facet set, cached 60 s.
+
+### 6.2.4 Search behaviour (`/public/products/search`, `/public/search`)
+- Normalise `q` (trim, collapse spaces, unaccent, lowercase); reject < 2 or > 80 chars (400).
+- Query = `websearch_to_tsquery('simple', q)` with prefix matching on the last token (`:*`) for typeahead, OR trigram `similarity(title,q) > 0.3`; rank as in 3.11; ties by `sortOrder`.
+- Returns `{ id, slug, title, shortDescription (truncated 140), image: MediaDto|null (w320), brand: {name,slug}|null, category }`.
+- Empty result => `{data: []}` (200).
+- 60 req/min/IP throttle.
+
+### 6.2.5 Public sitemap composition
+Includes: `/`, `/about`, `/products`, `/brands`, `/services`, `/news` (if posts exist), `/contact`, every published product/brand/service/post/custom page/category (unless `seo.noindex` or `SiteSettings.sitemap.excludeTypes` or `Page.showInSitemap=false`), with `lastmod = updatedAt`, `changefreq/priority` from settings per type (defaults: home 1.0 weekly; products 0.8 monthly; brands 0.7; services 0.7; posts 0.6; pages 0.5). Images (hero) included in `images[]`. Cached 5 min; tag `sitemap`.
+
+### 6.2.6 Robots
+`User-agent: *`, `Allow: /`, `Disallow: /admin`, `Disallow: /api`, `Disallow: /search`, plus `SiteSettings.robots.disallow`, extra rules, and `Sitemap: https://<domain>/sitemap.xml`. If `seoDefaults.siteNoindex` => `Disallow: /` and sitemap omitted.
+
+## 6.3 Admin API
+
+All under `/api/v1/admin` (+ `/auth` for identity). Require access cookie + CSRF header (unsafe methods) + `Role.ADMIN`. `Cache-Control: no-store`.
+
+### 6.3.0 Standard endpoints (apply to every resource marked in the matrix)
+
+For a resource at `/admin/{res}`:
+
+| Method | Path | Purpose | Notes |
+|--------|------|---------|-------|
+| GET | `/admin/{res}` | List (paginated) | filters per resource; `deleted=true` shows trash |
+| POST | `/admin/{res}` | Create | slug auto if missing; sanitization; revision #1; audit; event |
+| GET | `/admin/{res}/:id` | Read full admin DTO incl. children, seo, `warnings[]` | |
+| PATCH | `/admin/{res}/:id` | Update (partial) | revision + audit + event; `expectedVersion` |
+| DELETE | `/admin/{res}/:id` | Soft delete (to trash) | 409 `SYSTEM_RESOURCE_PROTECTED` for system rows |
+| POST | `/admin/{res}/:id/restore` | Restore from trash | |
+| DELETE | `/admin/{res}/:id/purge` | Hard delete (only if already in trash) | |
+| POST | `/admin/{res}/:id/duplicate` | Clone as DRAFT (`"Copy of ..."`, new slug) | publishable resources |
+| POST | `/admin/{res}/:id/publish` | status -> PUBLISHED, `publishedAt = now` (if null) | body `{}`; validates required fields (title, shortDescription, hero image optional) |
+| POST | `/admin/{res}/:id/unpublish` | -> DRAFT | |
+| POST | `/admin/{res}/:id/schedule` | body `{ scheduledAt: ISO (future) }` -> SCHEDULED; job publishes at time (minute precision) | |
+| POST | `/admin/{res}/:id/archive` | -> ARCHIVED | |
+| PATCH | `/admin/{res}/reorder` | body `{ ids: string[] }` full ordered list of the (filtered) set; rewrites `sortOrder` | ordered resources only; 422 if ids don't match the set |
+| GET | `/admin/{res}/:id/revisions` | list revisions `{id, versionNo, createdAt, author, changeNote}` | |
+| GET | `/admin/{res}/:id/revisions/:revisionId` | snapshot + diff against current | |
+| POST | `/admin/{res}/:id/revisions/:revisionId/restore` | restore snapshot (creates new revision) | |
+| POST | `/admin/{res}/bulk` | body `{ ids, action: 'publish'\|'unpublish'\|'archive'\|'delete'\|'restore' }` | max 100 ids |
+
+Resource matrix (which standard endpoints exist):
+
+| `{res}` | Entity | Publish workflow | Reorder | Revisions | SEO | Duplicate | Notes |
+|---------|--------|------------------|---------|-----------|-----|-----------|-------|
+| `pages` | Page | yes | no (blocks reorder separately) | yes | yes | yes | system pages: no delete, slug locked |
+| `products` | Product | yes | yes | yes | yes | yes | |
+| `product-categories` | ProductCategory | yes | yes (within parent) | yes | yes | no | |
+| `brands` | Brand | yes | yes | yes | yes | yes | |
+| `services` | Service | yes | yes | yes | yes | yes | |
+| `videos` | Video | yes | yes | no | no | no | |
+| `posts` | Post | yes | no | yes | yes | yes | |
+| `post-categories` | PostCategory | no | yes | no | yes | no | |
+| `tags` | Tag | no | no | no | no | no | simple CRUD |
+| `subsidiaries` | Subsidiary | yes | yes | yes | yes | no | |
+| `hero-slides` | HeroSlide | yes | yes | no | no | yes | |
+| `stats` | Stat | visible toggle | yes | no | no | no | |
+| `timeline` | TimelineEntry | visible toggle | yes | no | no | no | |
+| `core-values` | CoreValue | yes | yes | no | no | no | filter `group` |
+| `leader-messages` | LeaderMessage | yes | yes | yes | no | no | one `isPrimary` |
+| `team-members` | TeamMember | yes | yes | no | no | no | |
+| `testimonials` | Testimonial | yes | yes | no | no | no | |
+| `faq-groups` | FaqGroup | yes | yes | no | no | no | nested `faqs` below |
+| `contact-channels` | ContactChannel | visible toggle | yes | no | no | no | |
+| `offices` | Office | visible toggle | yes | no | no | no | |
+| `social-links` | SocialLink | visible toggle | yes | no | no | no | |
+| `redirects` | Redirect | enabled toggle | no | no | no | no | |
+Toggle-type resources have no publish/schedule endpoints; they use `visible`/`enabled` fields in PATCH.
+
+### 6.3.1 Auth and account (`/auth`, `/admin/me`)
+
+| Method | Path | Auth | Request | Response | Errors |
+|--------|------|------|---------|----------|--------|
+| POST | `/auth/login` | public | `{email, password}` | `200 {status:'OK', user, mustChangePassword, csrfToken}` or `{status:'TOTP_REQUIRED', challengeToken}` + cookies | 401 `INVALID_CREDENTIALS`, 423 `ACCOUNT_LOCKED`, 429 |
+| POST | `/auth/login/totp` | public | `{challengeToken, code?: string(6), recoveryCode?: string}` | as login OK | 401, 423, 429 |
+| POST | `/auth/refresh` | refresh cookie + CSRF | - | `200 {user, csrfToken}` + cookies | 401 `REFRESH_*` |
+| POST | `/auth/logout` | access | - | 204 | |
+| POST | `/auth/logout-all` | access | - | 204 | |
+| GET | `/auth/me` | access | - | `MeDto` | 401 |
+| POST | `/auth/forgot-password` | public | `{email}` | `202 {message}` | 429 |
+| POST | `/auth/reset-password/validate` | public | `{token}` | `{valid}` | 429 |
+| POST | `/auth/reset-password` | public | `{token, newPassword}` | 204 | 400 `RESET_TOKEN_INVALID`, 422 weak password |
+| POST | `/auth/change-password` | access | `{currentPassword, newPassword}` | 204 (fresh cookies set) | 401/422 |
+| GET | `/auth/sessions` | access | - | `{data: SessionDto[]}` | |
+| DELETE | `/auth/sessions/:id` | access | - | 204 | 404 |
+| POST | `/auth/2fa/setup` | access | `{password}` | `{otpauthUri, secretBase32}` | 401/409 already enabled |
+| POST | `/auth/2fa/enable` | access | `{code}` | `{recoveryCodes: string[10]}` | 400 invalid code |
+| POST | `/auth/2fa/disable` | access | `{password, code?, recoveryCode?}` | 204 | |
+| POST | `/auth/2fa/recovery-codes/regenerate` | access | `{password, code}` | `{recoveryCodes}` | |
+| PATCH | `/admin/me` | access | `{name?, avatarMediaId?}` | `MeDto` | |
+Email change is NOT supported via API in v1 (CLI only) to keep the account takeover surface minimal.
+
+### 6.3.2 Dashboard
+`GET /admin/dashboard` -> 
+```ts
+{ counts: { products:{total,published,draft,scheduled}, brands:{...}, services:{...}, posts:{...}, pages:{...}, videos:{total}, media:{total, sizeBytes} },
+  messages: { new: number, total: number, last7d: number[] /*daily counts*/ },
+  recentMessages: MessageSummaryDto[5], recentActivity: AuditSummaryDto[10], upcomingScheduled: {entityType,id,title,scheduledAt}[],
+  health: { db:'ok', storage:'ok', mail:'ok'|'unconfigured'|'failing', jobsBacklog: number, lastRevalidation:{status,at} },
+  warnings: { missingImages: {entityType,id,title}[], missingSeoDescription: number, unusedMedia: number, draftOlderThan30d: number, socialLinksMissing: boolean } }
+```
+
+### 6.3.3 Pages and blocks (`/admin/pages`)
+Standard endpoints plus:
+
+| Method | Path | Body | Response |
+|--------|------|------|----------|
+| GET | `/admin/pages/by-key/:key` | - | page by system key (`home`, `about`) with blocks |
+| GET | `/admin/pages/:id/blocks` | - | `PageBlockAdminDto[]` |
+| POST | `/admin/pages/:id/blocks` | `{type, data, anchorId?, navLabel?, showInTabNav?, visible?, sortOrder?}` | 201 block; 422 `BLOCK_INVALID` with zod issues in `details` |
+| PATCH | `/admin/pages/:id/blocks/:blockId` | partial | block |
+| DELETE | `/admin/pages/:id/blocks/:blockId` | - | 204 (hard delete; revision of page saved) |
+| PATCH | `/admin/pages/:id/blocks/reorder` | `{ids: string[]}` | 204 |
+| POST | `/admin/pages/:id/blocks/:blockId/duplicate` | - | block |
+| GET | `/admin/block-types` | - | `{data:[{type, label, description, jsonSchema, defaultData}]}` (JSON Schema generated from zod; drives the dashboard block editor) |
+| PUT | `/admin/pages/:id/blocks` | `{blocks: [...]}` | replace entire ordered list atomically (used by the visual editor "Save") |
+Create page body: `{title, slug?, template?, heroTitle?, heroSubtitle?, heroImageMediaId?, showInSitemap?, seo?: SeoMetaInput, blocks?: BlockInput[]}`. For custom pages with simple text the default is a single `RICH_TEXT` block.
+
+### 6.3.4 Catalogue endpoints
+
+**Products** (`/admin/products`) — standard + :
+
+| Method | Path | Body | Notes |
+|--------|------|------|-------|
+| GET | `/admin/products` | filters `status,q,brandId,categoryId,featured,countryCode,missingImage(bool),sort` | list of `ProductAdminListItem` |
+| PUT | `/admin/products/:id/images` | `{images: {mediaId, caption?, altOverride?}[]}` | replace gallery in order (max 30) |
+| PUT | `/admin/products/:id/specs` | `{specs: {groupName?, label, value, unit?}[]}` | replace (max 100) |
+| PUT | `/admin/products/:id/documents` | `{documents: {title, mediaId, language?}[]}` | replace (max 20; media must be kind DOCUMENT) |
+| PUT | `/admin/products/:id/related` | `{relatedIds: string[]}` | max 8 |
+| PATCH | `/admin/products/:id/feature` | `{isFeatured: boolean}` | quick toggle |
+Create/PATCH body (`ProductInput`): `{title, slug?, shortDescription, contentHtml?, heroImageMediaId?, brandId?, categoryId?, extraCategoryIds?, countryCode?, countryName?, originCity?, isFeatured?, inquiryEnabled?, partNumber?, tagline?, seo?, images?, specs?, documents?, relatedIds?, expectedVersion?}` (nested arrays optional — if present they replace).
+
+**Product categories**, **Brands** (`/admin/brands`: body `{name, slug?, kind, shortDescription, descriptionHtml?, logoMediaId?, logoDarkMediaId?, heroImageMediaId?, countryCode?, countryName?, city?, websiteUrl?, showInMarquee?, isFeatured?, seo?}`; extra `GET /admin/brands/:id/products` and `GET /admin/brands/:id/videos`), **Services** (`{title, slug?, shortDescription, bodyHtml?, imageMediaId?, iconName?, ctaLabel?, ctaHref?, features: {title, description?}[], seo?}`; features replaced when provided), **Videos** (`{title, description?, url, thumbnailMediaId?, brandId?, productId?, isFeatured?}`; server parses `url`, 422 `INVALID_YOUTUBE_URL` when no ID found; returns `youtubeId`, `startSeconds`).
+
+### 6.3.5 Editorial and about-page content
+`posts` (`{title, slug?, excerpt, bodyHtml, coverMediaId?, authorName?, categoryId?, tagIds?|tags?: string[] (names auto-created), isFeatured?, publishedAt?, seo?}`), `post-categories`, `tags`, `testimonials` (`{quote, personName, personRole?, companyName?, photoMediaId?, rating?}`), `faq-groups` (+ nested: `GET/POST /admin/faq-groups/:id/faqs`, `PATCH/DELETE /admin/faq-groups/:id/faqs/:faqId`, `PATCH /admin/faq-groups/:id/faqs/reorder`), `subsidiaries` (`{name, slug?, legalName?, kind, countryCode, regionNote?, tagline?, introHtml, bodyHtml?, lists: {title, style, items: string[]}[], brandLinks: {brandId, relation}[], logoMediaId?, imageMediaId?, websiteUrl?, seo?}`), `leader-messages` (`{heading, name?, jobTitle?, photoMediaId?, signatureMediaId?, messageHtml, isPrimary?}`; setting `isPrimary=true` unsets others in the same transaction), `team-members`, `timeline` (`{yearLabel, startYear?, title, description?, imageMediaId?, icon?, visible}`), `core-values` (`{group, title, description?, icon?}`), `stats` (`{value, prefix?, suffix?, label, icon?, group?, visible}`), `hero-slides` (`{eyebrow?, heading, subheading?, imageMediaId, mobileImageMediaId?, overlayOpacity?, button1Label?, button1Href?, button2Label?, button2Href?, productId?, brandId?, startsAt?, endsAt?, visible}`).
+
+### 6.3.6 Site settings, UI strings, navigation, contact info
+
+| Method | Path | Body | Response / notes |
+|--------|------|------|------------------|
+| GET | `/admin/settings` | - | `SiteSettingsAdminDto` (all JSON groups + media DTOs) |
+| PUT | `/admin/settings` | full `UpdateSiteSettingsDto` (all groups optional; provided groups replaced) | 200; revision + audit `SETTINGS_UPDATE`; revalidates tag `site` |
+| PATCH | `/admin/settings/{group}` | group in `branding`,`header`,`footer`,`seo`,`analytics`,`maintenance`,`announcement`,`contact-form`,`robots`,`sitemap` | partial update per group |
+| GET | `/admin/settings/revisions`, `.../:revisionId`, `POST .../:revisionId/restore` | | revisions of settings |
+| GET | `/admin/ui-strings` | `?group=&q=` | `{data: {id,key,value,group,locale,description}[]}` |
+| PUT | `/admin/ui-strings` | `{ items: {key, value, locale?}[] }` (bulk upsert, max 200; unknown keys allowed only if key matches `^[a-z0-9]+(\.[a-zA-Z0-9]+)+$`) | 200 |
+| DELETE | `/admin/ui-strings/:id` | | reverts to default (seed default kept in code `ui-strings.defaults.ts`) |
+| GET | `/admin/menus` | | all menus with items |
+| GET | `/admin/menus/:location` | | menu + tree |
+| PUT | `/admin/menus/:location/items` | `{items: MenuItemInput[]}` nested tree (`{id?, type, label, pageId?, entityType?, entityId?, href?, target?, icon?, config?, visible, children?: MenuItemInput[]}`), replaces whole menu atomically, validates depth <= 2 and referenced entities exist | 200 menu |
+| CRUD | `/admin/contact-channels`, `/admin/offices`, `/admin/social-links` | per 6.3.0 matrix | `social-links`: `url` required to make `visible=true` (422) |
+| GET | `/admin/seo-preview` | `?entityType=&id=` | returns resolved `SeoDto` for SERP/OG preview in the editor |
+
+### 6.3.7 Media library
+
+| Method | Path | Body / query | Response / errors |
+|--------|------|--------------|-------------------|
+| POST | `/admin/media` | multipart: `file` (1..10 files), optional `folderId`, `alt`, `title`, `intent` (`IMAGE`\|`ICON`\|`DOCUMENT`), `visibility` (`PUBLIC`\|`PRIVATE`, documents only) | `201 MediaAdminDto[]` (per-file result with `error` object for failures; HTTP 207 when mixed); 413, 415 |
+| GET | `/admin/media` | `q, kind, folderId, unused(bool), visibility, page, pageSize(<=100), sort(-createdAt)` | `Paginated<MediaAdminDto>` |
+| GET | `/admin/media/:id` | | `MediaAdminDto` incl. `variants`, `usage: {entityType, entityId, title, field}[]`, `duplicates: id[]` (same sha256) |
+| PATCH | `/admin/media/:id` | `{alt?, caption?, title?, folderId?, focalX?, focalY?}` | |
+| PUT | `/admin/media/:id/file` | multipart `file` | Replace file keeping id (new `v{n}`), regenerates variants; same kind required |
+| DELETE | `/admin/media/:id` | `?force=bool` | 204; 409 `MEDIA_IN_USE` with usage list |
+| POST | `/admin/media/bulk` | `{ids, action:'move'\|'delete', folderId?}` | 200 |
+| GET | `/admin/media/:id/download` | | streams original (admin only; private docs) |
+| GET/POST/PATCH/DELETE | `/admin/media-folders[/:id]` | `{name, parentId?}` | delete only if empty (409) |
+| POST | `/admin/media/:id/regenerate` | | re-run variants |
+`MediaAdminDto` = `MediaDto` + `{ originalName, mimeType, sizeBytes, sha256, visibility, folderId, processingStatus, createdAt, uploadedBy, usageCount }`.
+
+### 6.3.8 Messages inbox (`/admin/messages`)
+
+| Method | Path | Body / query | Response |
+|--------|------|--------------|----------|
+| GET | `/admin/messages` | `status` (CSV), `starred`, `q`, `from`, `to`, `productId`, `page`, `pageSize`, `sort` (`-createdAt`) | `Paginated<MessageListItemDto>` + `meta.counts: {NEW,READ,REPLIED,ARCHIVED,SPAM}` |
+| GET | `/admin/messages/:id` | - | `MessageDto` (auto marks `NEW` -> `READ` when `?markRead=true`, default true for first view) |
+| PATCH | `/admin/messages/:id` | `{status?, isStarred?}` | `MessageDto` (audit `MESSAGE_STATUS`) |
+| POST | `/admin/messages/:id/notes` | `{body}` | 201 note |
+| DELETE | `/admin/messages/:id/notes/:noteId` | | 204 |
+| POST | `/admin/messages/:id/reply` | `{subject, body}` plain text | sends email via SMTP to sender (Reply-To = notify address), stores note `kind=REPLY`, status -> `REPLIED`, `repliedAt`; 202 (queued) |
+| POST | `/admin/messages/:id/mark-spam` | | status `SPAM`; also adds `email` to temp spam list (in-memory 24 h) |
+| POST | `/admin/messages/:id/not-spam` | | status -> `READ` |
+| POST | `/admin/messages/bulk` | `{ids, action:'read'\|'archive'\|'spam'\|'delete'\|'star'\|'unstar'}` | 200 `{affected}` |
+| DELETE | `/admin/messages/:id` | | hard delete 204 |
+| GET | `/admin/messages/export.csv` | same filters | CSV (`text/csv`), formula-injection safe (cells beginning with `= + - @` prefixed by `'`) |
+| GET | `/admin/messages/unread-count` | | `{count}` (header badge; frontend polls every 60 s) |
+
+### 6.3.9 Redirects (`/admin/redirects`)
+Standard CRUD (no publish) +:
+
+| Method | Path | Body | Notes |
+|--------|------|------|-------|
+| POST | `/admin/redirects/test` | `{path}` | returns resolution chain and detects loops |
+| POST | `/admin/redirects/import` | multipart CSV `source,target,type,match` (max 1000 rows) with `?dryRun=true` | per-row result; invalid rows reported |
+| GET | `/admin/redirects/export.csv` | | CSV |
+Validation: normalised source; target not equal to source; no loop (DFS depth 10); `409 REDIRECT_LOOP`; `auto=true` rows are editable but deleting the entity does not delete them.
+
+### 6.3.10 Audit, revisions, revalidation, preview, import/export, system
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/admin/audit-logs` | filters `actorId, action, entityType, entityId, from, to, q`, paginated, `sort=-createdAt` |
+| GET | `/admin/revisions/:entityType/:entityId` | alias of per-resource revision listing |
+| POST | `/admin/revalidate` | `{ scope: 'ALL' \| 'TAGS', tags?: string[] }` -> 202; logs `REVALIDATE` |
+| GET | `/admin/revalidation-logs` | last 100 |
+| POST | `/admin/preview` | see 6.1.8 |
+| GET | `/admin/export` | `?include=settings,pages,products,...` (default all content, NOT users/messages/audit) -> `application/json` bundle `{version:1, exportedAt, entities:{...}, mediaManifest:[{id,objectKey,originalName,sha256}]}`; media binaries are not included (backup via MinIO mirror); audit `EXPORT` |
+| POST | `/admin/import` | multipart bundle JSON, `?dryRun=true` (default true) `&mode=merge|replace-content`; validates every entity with its DTO, reports `{created, updated, skipped, errors[]}`; apply requires `dryRun=false` and `confirm=IMPORT`; max 10 MB; audit `IMPORT` |
+| GET | `/admin/export/messages.csv` | alias of messages export |
+| GET | `/admin/system/info` | `{version, commit, node, uptime, db:{size}, storage:{usedBytes}, jobs:{queued,failed}, smtp:{configured}}` |
+| POST | `/admin/system/test-email` | `{to}` sends a test mail (throttled 5/hour) |
+| POST | `/admin/trash/purge` | `{entityType?}` purge older-than-0 trash now (confirm param `confirm=PURGE`) |
+| GET | `/admin/trash` | cross-entity trash list `{entityType,id,title,deletedAt}` |
+
+## 6.4 Behavioural rules shared by admin writes
+
+1. Sanitize all `*Html` fields on write (4.9). Reject (`422 HTML_REJECTED`) only if a required rich field becomes empty after sanitizing.
+2. Slug rules (3.3); slug change on PUBLISHED creates auto-redirect.
+3. Referenced IDs (media, brand, category, product, page) are validated to exist and not be deleted (422 with `details`).
+4. Maintain `MediaRef` index for every media-bearing field and for `<img src>` inside sanitized HTML.
+5. After successful write in the same DB transaction: insert `ContentRevision` (if resource has revisions), `AuditLog`; after commit: emit `content.changed` (revalidation + cache invalidation).
+6. Status transitions allowed: `DRAFT -> PUBLISHED|SCHEDULED|ARCHIVED`, `SCHEDULED -> PUBLISHED|DRAFT`, `PUBLISHED -> DRAFT|ARCHIVED|SCHEDULED`, `ARCHIVED -> DRAFT|PUBLISHED`. A SCHEDULED item becomes PUBLISHED by the `publish-scheduled` job (every minute, `SELECT ... FOR UPDATE SKIP LOCKED`), sets `publishedAt = scheduledAt`, emits event, writes audit (actor `SYSTEM`).
+7. Publishing validation (blocks publish with 422): product/brand/service/post require non-empty `title` and `shortDescription`/`excerpt`; post requires `bodyHtml`; page requires at least one visible block (except if `RICH_TEXT` content present).
+8. Public output filters: `status=PUBLISHED`, `deletedAt IS NULL`, `publishedAt <= now()`.
+9. Dynamic menu items resolve against published entities at read time.
+10. `PATCH` with unchanged values still bumps nothing (no-op detection: if diff empty -> 200 without revision/audit/event).
+
+## 6.5 UI string key catalogue (used by `GET /public/ui-strings`)
+
+Groups: `common`, `nav`, `footer`, `home`, `about`, `products`, `product`, `services`, `contact`, `search`, `notFound`, `errors`, `news`. Defaults live in `apps/api/src/settings/ui-strings.defaults.ts` (code) and are seeded; public API returns defaults merged with DB overrides so a missing DB row never yields an empty label. Frontend MUST NOT hard-code user-visible strings that exist as keys.
+
+---
+
+# 7. Contact form pipeline
+
+## 7.1 Request
+
+`POST /api/v1/public/contact` (public, JSON).
+```ts
+interface SubmitContactDto {
+  name: string;            // 2..120, trimmed, no control chars
+  email: string;           // valid email, <= 254, lowercased
+  phone?: string;          // optional, 6..40, pattern ^[+0-9 ()\-.]{6,40}$
+  message: string;         // 10..5000
+  subject?: string;        // <= 160 (optional; frontend may omit)
+  productSlug?: string;    // optional context ("Request a quote" on a product page)
+  sourcePath?: string;     // optional, must start with '/', <= 300
+  consent?: boolean;       // required true only when settings.contactForm.consentRequired
+  website?: string;        // HONEYPOT (hidden field, MUST be empty/absent)
+  formStartedAt?: number;  // epoch ms when form rendered (time-trap)
+  captchaToken?: string;   // required when settings.contactForm.captchaProvider != 'NONE'
+}
+```
+
+## 7.2 Pipeline (ordered; reject early, cheaply)
+
+1. **Throttle** (IP 5/hour, 20/day; email 3/hour) -> 429 `RATE_LIMITED`.
+2. **Validate** DTO -> 422 with `details[]`. Strip HTML tags and control chars from `name`, `subject`, `message` (stored as plain text; never rendered as HTML anywhere, including the admin UI and emails, which use escaped output).
+3. **Honeypot**: if `website` non-empty -> respond `201` with a fake success (`{id:null, reference:null}`) and store nothing except an internal log counter (bots learn nothing).
+4. **Time trap**: if `formStartedAt` present and `now - formStartedAt < 3000 ms` -> treat as spam (store with status `SPAM`, no notification) but still respond 201.
+5. **Captcha** (when enabled): verify token server-side with provider (Turnstile `https://challenges.cloudflare.com/turnstile/v0/siteverify`, hCaptcha `https://hcaptcha.com/siteverify`), passing remote IP; failure -> 403 `CAPTCHA_FAILED`; provider timeout (3 s) -> fail OPEN with extra spam score +3 if the provider is down, so real customers can still write (logged).
+6. **Spam scoring** (`SpamService`, sum; >= 5 => `SPAM`): links count > 2 (+2), contains common spam phrases list (+2, list in code, extendable via settings later), disposable email domain list (+2), name == email local part with digits (+1), identical message from same IP in last 24 h (+3, duplicate guard), email on temporary spam list (+5), message length < 15 with URL (+2). Reasons stored in `spamReasons`.
+7. **Resolve product** context: `productSlug` -> `productId` + `productTitleSnapshot` (ignore silently if unknown).
+8. **Persist** `ContactMessage` (`status NEW` or `SPAM`), generate `reference`.
+9. **Notify** (not for SPAM): enqueue `send-email` job `contact-notification` to `settings.contactForm.notifyTo` (fallback env `CONTACT_NOTIFY_TO`); email contains reference, name, email, phone, product, message (escaped), link to `${ADMIN_URL}/admin/messages/{id}`; `Reply-To` = sender email; `From` = `MAIL_FROM`. Optional auto-reply to sender if `autoReplyEnabled` (text from settings; plain text; no message echo). Email failure does not fail the request; `notificationStatus` updated by job (retries 5x).
+10. Respond `201 { id, reference, message: <successMessage from settings/ui-string contact.success> }`.
+
+## 7.3 Inbox states and UX rules
+
+| State | Meaning | Transitions by admin |
+|-------|---------|----------------------|
+| `NEW` | unseen | -> `READ` (auto on open), `SPAM`, `ARCHIVED` |
+| `READ` | seen | -> `REPLIED`, `ARCHIVED`, `SPAM` |
+| `REPLIED` | reply email sent or manually marked | -> `ARCHIVED`, `READ` |
+| `ARCHIVED` | hidden from default view | -> `READ` |
+| `SPAM` | filtered; excluded from unread count and counts badge | -> `READ` ("not spam") |
+Default list view = `NEW,READ,REPLIED`; tabs for Archived and Spam; star flag; internal notes (chronological); reply composer (plain text, sent through SMTP, stored as `REPLY` note); bulk actions; CSV export; unread badge from `/admin/messages/unread-count`. SPAM and ARCHIVED messages older than 180 days purged by job `purge-messages` only if `MESSAGES_RETENTION_DAYS` is set (default unset = keep).
+
+---
+
+# 8. Non-functional design
+
+## 8.1 Performance and caching
+
+| Layer | Strategy |
+|-------|----------|
+| Next.js | ISR/`fetch` tags; public API called server-to-server over internal network |
+| HTTP | `Cache-Control: s-maxage=60, stale-while-revalidate=300`, ETag; proxy may cache public GETs 30 s (Caddy cache module optional) |
+| API in-process cache | `CacheService.wrap(key, tags, ttl=60s)` for public read models; invalidated via tags on `content.changed`; max 500 entries LRU |
+| DB | Indexes listed in section 3; `select` projections for cards; N+1 avoided through `include` with explicit relation sets; pagination mandatory; `EXPLAIN` review for list+search queries; connection pool 10 (`DATABASE_POOL_MAX`) |
+| Images | Variants + `blurhash` + immutable caching; AVIF/WebP |
+| Compression | Done at proxy (gzip/br); API compression middleware only when proxy absent |
+| Budgets | Public GET p95 < 80 ms cached / < 250 ms uncached at 50 rps on 2 vCPU; search p95 < 150 ms with 1k products; admin list p95 < 300 ms |
+| Jobs | pg-boss concurrency: email 3, revalidate 2, image-variants 2 (sharp concurrency limited via `sharp.concurrency(2)`) |
+
+## 8.2 Observability
+
+- **Logging**: `nestjs-pino`, JSON to stdout, `requestId` (`X-Request-Id` accepted if valid ULID/UUID else generated; echoed in response), levels via `LOG_LEVEL`, redaction (4.9), request log includes method, route template, status, duration, userId (if any). Health routes excluded from access logs.
+- **Metrics** (optional but planned): `/metrics` Prometheus endpoint (`prom-client`) bound to internal network only (`METRICS_ENABLED`), exposing HTTP histograms, pg-boss queue depth, login failures, contact submissions, revalidation failures.
+- **Error tracking**: optional Sentry (`SENTRY_DSN`), scrubbing same as logs.
+- **Health**: `GET /health/live` (process up), `GET /health/ready` (DB `SELECT 1`, MinIO bucket stat, pg-boss started; SMTP not blocking). Compose healthchecks use these.
+- **Audit**: DB audit log (6.3.10) is the business-level trail; app logs are operational.
+- **Alerts** (ops, later): uptime check on `/health/ready`; disk usage > 80 %; backup job failure (backup container exits non-zero and writes `/backups/LAST_STATUS`); revalidation failure count.
+
+## 8.3 Migrations and database operations
+
+- Prisma Migrate (`prisma migrate dev` locally; `prisma migrate deploy` run by the API container entrypoint before start, guarded by advisory lock so only one instance migrates).
+- Raw-SQL pieces (extensions, FTS triggers, partial unique indexes such as "one primary LeaderMessage", `CHECK (id='singleton')`) live in hand-authored migration files committed with the schema; a CI check runs `prisma migrate diff` to confirm schema/migrations agree.
+- Naming: `YYYYMMDDHHMMSS_<snake_description>`; never edit applied migrations.
+- Rollback policy: forward-only; destructive migrations (drop column) happen two releases after code stops using the column.
+- Seeds are separate from migrations (3.13).
+
+## 8.4 Backups and restore
+
+| Item | Method | Schedule | Retention | Target |
+|------|--------|----------|-----------|--------|
+| PostgreSQL | `pg_dump --format=custom --compress=9` (service `backup`), plus weekly `pg_dumpall --globals-only` | daily 02:15 server time | 7 daily, 4 weekly, 6 monthly | `/backups/pg/` on a separate volume AND synced offsite |
+| MinIO | `mc mirror --overwrite --remove` of `public-media` and `private-docs` to `/backups/minio/` (and offsite) ; versioned object listing manifest | daily 02:45 | mirror (latest) + weekly snapshot tarball kept 4 | local volume + offsite |
+| Offsite | `rclone` (or `mc`) to an S3-compatible bucket (Backblaze B2 / Wasabi / another VPS) with client-side encryption (`crypt`) | after each local backup | per provider lifecycle | env `OFFSITE_*` |
+| Config | `.env` and compose files copied encrypted (`age`) | weekly | 4 | offsite |
+| Verification | Weekly automated restore test: restore latest dump into a throwaway Postgres container, run `SELECT count(*)` sanity checks on key tables, write result to `/backups/LAST_RESTORE_CHECK` | weekly | - | - |
+Restore runbook (documented in `deploy/README-ops.md` at implementation): stop api/web, `pg_restore --clean --if-exists -d barathon dump`, `mc mirror` back, start services, run `cli db:check`, trigger `/admin/revalidate` scope ALL.
+RPO <= 24 h, RTO <= 2 h.
+
+## 8.5 Environment variable catalogue (`.env.example`)
+
+```dotenv
+# ---------- General ----------
+NODE_ENV=development                  # development | production | test
+APP_NAME=barathon-api
+APP_VERSION=0.1.0
+PORT=4000
+LOG_LEVEL=info                        # trace|debug|info|warn|error
+TRUST_PROXY=1                         # number of proxy hops
+TZ=UTC
+
+# ---------- URLs / CORS ----------
+PUBLIC_SITE_URL=http://localhost:3000            # canonical site origin (used for canonical/sitemap/emails)
+ADMIN_URL=http://localhost:3000                  # origin hosting /admin (reset links)
+ALLOWED_ORIGINS=http://localhost:3000            # comma list, exact origins
+API_PUBLIC_URL=http://localhost:3000/api/v1      # as seen by browsers
+PUBLIC_MEDIA_BASE_URL=http://localhost:3000/media
+REDIRECT_ALLOWED_HOSTS=localhost                 # comma list for absolute redirect targets
+INTERNAL_API_KEY=change-me-32+chars              # Next.js server -> API (rate-limit bypass for SSR)
+
+# ---------- Database ----------
+DATABASE_URL=postgresql://barathon:password@localhost:5432/barathon?schema=public
+DATABASE_POOL_MAX=10
+DB_AUTO_MIGRATE=true                             # run `migrate deploy` on boot (prod compose: true)
+
+# ---------- MinIO / S3 ----------
+MINIO_ENDPOINT=localhost
+MINIO_PORT=9000
+MINIO_USE_SSL=false
+MINIO_ACCESS_KEY=barathon-api
+MINIO_SECRET_KEY=change-me
+MINIO_REGION=us-east-1
+MINIO_BUCKET_PUBLIC=public-media
+MINIO_BUCKET_PRIVATE=private-docs
+MINIO_PRESIGN_TTL_SECONDS=300
+
+# ---------- Auth ----------
+JWT_ACCESS_SECRET=change-me-min-32-chars         # or JWT_ACCESS_SECRET_FILE
+ACCESS_TTL_SECONDS=900
+REFRESH_IDLE_DAYS=14
+SESSION_ABSOLUTE_DAYS=30
+COOKIE_SECURE=false                              # true in production (https)
+COOKIE_SAMESITE_ACCESS=lax
+ALLOW_BEARER=false
+PASSWORD_PEPPER=change-me-min-32-chars
+ARGON2_MEMORY_KIB=65536
+ARGON2_TIME_COST=3
+HIBP_CHECK=true
+APP_ENCRYPTION_KEY=base64-32-bytes               # AES-256-GCM key for TOTP secrets
+REQUIRE_2FA=false
+NEW_LOGIN_ALERT=true
+LOGIN_MAX_FAILURES=5
+LOCKOUT_BASE_MINUTES=15
+ADMIN_BOOTSTRAP_EMAIL=                           # optional first-run only
+ADMIN_BOOTSTRAP_PASSWORD=                        # optional first-run only (remove after)
+
+# ---------- Mail ----------
+SMTP_HOST=localhost
+SMTP_PORT=1025
+SMTP_SECURE=false
+SMTP_USER=
+SMTP_PASS=
+MAIL_FROM="Barathon Trading <no-reply@example.com>"
+CONTACT_NOTIFY_TO=admin@example.com              # fallback recipient(s), comma list
+
+# ---------- Captcha ----------
+CAPTCHA_PROVIDER=NONE                            # NONE|TURNSTILE|HCAPTCHA (overridden by settings)
+CAPTCHA_SECRET=
+FORGOT_CAPTCHA=false
+
+# ---------- Revalidation (API -> Next.js) ----------
+WEB_REVALIDATE_URL=http://localhost:3000/api/revalidate
+REVALIDATE_SECRET=change-me-min-32-chars
+PREVIEW_SECRET=change-me-min-32-chars
+
+# ---------- Observability ----------
+SWAGGER_ENABLED=true
+METRICS_ENABLED=false
+SENTRY_DSN=
+
+# ---------- Seed ----------
+SEED_ASSET_HOSTS=res.cloudinary.com
+SEED_DOWNLOAD_TIMEOUT_MS=15000
+
+# ---------- Retention ----------
+AUDIT_RETENTION_DAYS=365
+TRASH_RETENTION_DAYS=30
+MESSAGES_RETENTION_DAYS=
+MESSAGE_IP_TRUNCATE_DAYS=90
+```
+Compose-only vars (`deploy/.env`): `DOMAIN`, `ACME_EMAIL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `NEXT_PUBLIC_*` (frontend plan), `BACKUP_*`, `OFFSITE_*`. Env validation (zod) fails boot with a readable list of missing/invalid variables; in `production` also refuses placeholder values (`change-me*`), `COOKIE_SECURE=false`, `ALLOW_BEARER=true`.
+
+## 8.6 Docker / Compose design for later VPS deployment (design only)
+
+Services (network `barathon_net`, one external port set only on the proxy: 80/443):
+
+| Service | Image | Notes |
+|---------|-------|-------|
+| `proxy` | `caddy:2` | Automatic HTTPS (Let's Encrypt, `DOMAIN`, `ACME_EMAIL`); routes: `/api/*` -> `api:4000`; `/media/*` -> `minio:9000` with path rewrite `/media/*` -> `/public-media/media/*` (only GET/HEAD allowed) ; everything else -> `web:3000`; security headers (HSTS, nosniff), gzip/zstd, `request_body max_size 30MB` for `/api/*`; blocks `/api/docs` unless enabled; access log JSON |
+| `web` | built from `apps/web` (Next.js standalone output) | env `API_INTERNAL_URL=http://api:4000/api/v1`, `REVALIDATE_SECRET`, `INTERNAL_API_KEY`; healthcheck |
+| `api` | built from `apps/api` (multi-stage; node:22-slim; runs as `node` user; `prisma migrate deploy` in entrypoint; `sharp` prebuilt) | depends_on `postgres` (healthy), `minio` (healthy); healthcheck `GET /api/v1/health/ready`; `restart: unless-stopped`; `read_only: true` with tmpfs `/tmp`; resources limit 1 GB |
+| `postgres` | `postgres:16-alpine` | volume `pg_data`; `POSTGRES_*`; healthcheck `pg_isready`; not exposed; `shared_buffers` tuned small; `max_connections=50` |
+| `minio` | `minio/minio` (pinned release) | volume `minio_data`; console on `127.0.0.1:9001` only (SSH tunnel); API not exposed publicly; `MINIO_BROWSER_REDIRECT_URL` unset |
+| `minio-init` | `minio/mc` one-shot | creates buckets, applies anonymous-read policy on `public-media/media/*`, creates least-privilege service account `barathon-api` (readwrite on both buckets) |
+| `backup` | custom small image (`postgres-client`, `mc`, `rclone`, `age`, `cron`) | schedules 8.4; volumes `backups`, read-only access to `pg`/`minio` over network |
+| `mailpit` (dev compose only) | `axllent/mailpit` | local SMTP sink at 1025, UI 8025 |
+Volumes: `pg_data`, `minio_data`, `caddy_data`, `caddy_config`, `backups`. Compose files: `deploy/compose.yml` (base), `deploy/compose.dev.yml` (ports open, mailpit, hot reload mounts), `deploy/compose.prod.yml` (restart policies, resource limits, secrets). Docker secrets (`secrets:` + `*_FILE` env) used for DB password, JWT secret, MinIO keys, SMTP password in production. Logs: `json-file` driver with `max-size 10m, max-file 5`. Firewall: ufw allow 22 (key-only SSH), 80, 443. Updates: `docker compose pull && up -d` with `docker image prune`. Zero-downtime is not a goal (single instance); migrations are backward-compatible.
+
+Request routing map:
+```
+https://DOMAIN/            -> web
+https://DOMAIN/admin/*     -> web (admin dashboard pages; calls /api/v1 with cookies)
+https://DOMAIN/api/v1/*    -> api
+https://DOMAIN/media/*     -> minio public-media/media/*
+https://DOMAIN/sitemap.xml, /robots.txt -> web (Next route handlers proxy /public/sitemap, /public/robots.txt)
+```
+
+---
+
+# 9. Testing strategy and acceptance checklist
+
+## 9.1 Strategy
+
+| Level | Tooling | Scope | Gate |
+|-------|---------|-------|------|
+| Unit | Jest | slug generator, HTML sanitizer, YouTube parser, country normaliser, typo-fix engine, password policy, lockout math, token service, CSRF compare, block zod schemas (valid/invalid per type), redirect loop detector, spam scoring, sitemap builder, revalidation-tag mapper | >= 85 % line coverage on `auth`, `common/utils`, `pages` block schemas |
+| Integration (DB) | Jest + Testcontainers Postgres 16 + MinIO container | each service against real DB: soft-delete extension, search SQL, status transitions, scheduled-publish job, revisions, MediaRef maintenance, media pipeline with sample images | all green in CI |
+| E2E (HTTP) | Supertest against the booted Nest app with the same containers | every endpoint in section 6 happy path + main error codes + auth/CSRF/rate-limit paths + public caching headers | all green in CI; OpenAPI snapshot unchanged unless intentionally updated |
+| Contract | `openapi.snapshot.json` + response-shape tests using `packages/contracts` zod schemas to parse real responses | frontend/back compatibility | CI diff gate |
+| Security | `pnpm audit`, ESLint security rules, ZAP baseline scan against compose stack (manual/CI optional), checks in 9.3 SEC items | before each release |
+| Performance smoke | `k6` script: 50 VUs on public GET set for 2 min | p95 budgets 8.1 | pre-release |
+| Seed verification | Test that runs `seed` on empty DB and asserts counts and typo fixes | CI |
+| Manual QA | Checklist 9.3 | release |
+Test data builders in `test/factories`. Time-dependent tests use fake timers / injectable `Clock`. Email tests use an in-memory transport capturing messages. Each e2e suite starts with truncate + minimal seed. CI: GitHub Actions (lint, typecheck, unit, integration, e2e, build image).
+
+## 9.2 Definitions for the checklist
+
+`{API}` = `/api/v1`. "Admin session" = cookies obtained from successful `POST {API}/auth/login`; unsafe requests include `X-CSRF-Token`. "Seeded DB" = after `seed` + `seed:assets` (assets may be partially failed). Expected statuses are exact unless a range is given.
+
+## 9.3 ACCEPTANCE CHECKLIST
+
+### A. Platform and health
+1. `GET {API}/health/live` -> 200 `{status:'ok'}` with no auth.
+2. `GET {API}/health/ready` -> 200 when DB, MinIO, jobs OK; stop Postgres -> 503 `NOT_READY`.
+3. Any response includes `X-Request-Id`; sending a valid `X-Request-Id` echoes it; error bodies contain the same `requestId`.
+4. Unknown route `GET {API}/nope` -> 404 with the standard error format (`code: NOT_FOUND`).
+5. Boot with missing/placeholder required env in `NODE_ENV=production` -> process exits non-zero with a list of offending variables.
+6. `GET {API}/openapi.json` returns a valid OpenAPI 3.1 document containing every path in section 6; Swagger UI at `/api/docs` is 404 when `SWAGGER_ENABLED=false`.
+7. Security headers present on API responses: `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Content-Security-Policy` includes `frame-ancestors 'none'`, no `X-Powered-By`.
+8. CORS: preflight from an origin not in `ALLOWED_ORIGINS` gets no `Access-Control-Allow-Origin`; allowed origin gets exact echo + `Allow-Credentials: true`.
+9. A 500 caused by a forced exception returns generic body without stack/SQL text.
+10. JSON body > 1 MB to a non-upload route -> 413 `PAYLOAD_TOO_LARGE`.
+11. Malformed JSON -> 400 `BAD_REQUEST`; unknown property in body of any admin POST -> 422 `VALIDATION_FAILED` naming the property.
+
+### B. Authentication (custom Passport)
+12. No public registration: `POST {API}/auth/register`, `/auth/signup`, `/users` -> 404.
+13. `cli admin:create` creates an ADMIN with argon2id hash (stored hash starts with `$argon2id$`); password < 12 chars or weak (e.g. `password1234`) is rejected by the CLI.
+14. `POST /auth/login` with correct credentials -> 200 `status:'OK'`; response sets three cookies: access (`HttpOnly`, `SameSite=Lax`, `Secure` when configured), refresh (`HttpOnly`, `SameSite=Strict`, `Path=/api/v1/auth`), csrf (readable, not HttpOnly). No token appears in the JSON body.
+15. Wrong password -> 401 `INVALID_CREDENTIALS`; unknown email -> identical status/body/shape; response time difference between unknown and known email < 50 ms median over 20 tries (dummy hash).
+16. 5 consecutive wrong passwords -> next attempt (even with correct password) -> 423 `ACCOUNT_LOCKED` with `retryAfterSeconds`; after the lock expires a correct login succeeds and the counter resets; `AuditLog` has `LOGIN_FAILED` x5 and `ACCOUNT_LOCKED`.
+17. `cli admin:unlock` clears a lock immediately.
+18. >10 login requests/min from one IP -> 429 `RATE_LIMITED` with `Retry-After`.
+19. `GET /auth/me` with valid cookie -> 200 `MeDto`; without cookie -> 401 `UNAUTHENTICATED`; with expired access token -> 401 `TOKEN_EXPIRED`.
+20. Access JWT contains `sub,sid,role,tv,exp,iss,aud` and `exp - iat = 900`; a token signed with another secret/`alg:none` is rejected 401.
+21. Bearer header is ignored when `ALLOW_BEARER=false`.
+22. `POST /auth/refresh` with valid refresh cookie + CSRF -> 200, new access and refresh cookies, DB shows old token `usedAt` set and a new token row with `parentId`.
+23. Reusing the previous refresh token >10 s later -> 401 `REFRESH_REUSE`, the whole session is revoked (subsequent `/auth/me` -> 401), `AuditLog` has `REFRESH_REUSE_DETECTED`.
+24. Reusing the previous refresh token within 10 s -> 401 `REFRESH_RACE` and the session stays valid.
+25. Refresh without CSRF header -> 403 `CSRF_INVALID`.
+26. Idle expiry: after 14 days (time-travel) refresh -> 401 `REFRESH_INVALID`; absolute expiry at 30 days regardless of activity.
+27. Refresh tokens are stored only as sha256 hex (`tokenHash`), never plaintext (inspect DB).
+28. `POST /auth/logout` -> 204, cookies cleared (Max-Age=0), session `revokedAt` set, old access token rejected within 10 s.
+29. `POST /auth/logout-all` revokes every session of the user and bumps `tokenVersion`; other devices' access tokens fail.
+30. `GET /auth/sessions` lists active sessions with `current:true` on exactly one; `DELETE /auth/sessions/:id` of another session -> 204 and that session's refresh fails; of another user's/unknown id -> 404.
+31. Forgot password: `POST /auth/forgot-password` for existing and non-existing emails -> identical `202` body; an email is queued only for the existing one containing a link with a token.
+32. Reset token: stored hashed, expires in 30 min (after expiry `/auth/reset-password` -> 400 `RESET_TOKEN_INVALID`), single use (second use -> 400), requesting a new token invalidates the previous.
+33. `POST /auth/reset-password` with weak password -> 422; with valid -> 204, all sessions revoked, lock reset, "password changed" email sent, old password no longer works, new one does.
+34. Forgot-password throttle: 4th request within an hour for the same email -> 429.
+35. `POST /auth/change-password` with wrong current password -> 401; with reuse of one of last 5 passwords -> 422; success -> 204, other sessions revoked, current session continues (fresh cookies).
+36. `mustChangePassword=true` user: any `/admin/*` call -> 403 `PASSWORD_CHANGE_REQUIRED` until password changed.
+37. 2FA setup -> enable with valid TOTP -> 10 recovery codes returned once; DB stores only hashes; `totpSecretEnc` is encrypted (not base32 plaintext).
+38. With 2FA enabled, login returns `TOTP_REQUIRED` and no cookies; `POST /auth/login/totp` with valid code -> cookies set; invalid code -> 401 and lockout counter increments; reused TOTP code within same 30 s step -> 401; recovery code works once then fails.
+39. `2fa/disable` requires password + code; after disabling, login is single-step again.
+40. With `REQUIRE_2FA=true`, admin routes return 403 `TWO_FA_SETUP_REQUIRED` until enabled.
+41. CSRF: an authenticated `POST /admin/products` without `X-CSRF-Token` -> 403 `CSRF_INVALID`; with mismatched token -> 403; with matching token and allowed Origin -> success.
+42. Origin check: authenticated unsafe request with `Origin: https://evil.example` -> 403; with no Origin/Referer -> 403 `ORIGIN_REQUIRED`.
+43. Every `/admin/*` route (sample all controllers) returns 401 without cookie; all `/public/*` GET return 200/404 without cookie.
+44. Argon2 params: stored hash encodes `m=65536,t=3,p=1` (or env overrides); a changed param triggers silent rehash on next login.
+45. Audit log contains LOGIN, LOGOUT, PASSWORD_CHANGE, PASSWORD_RESET, SESSION_REVOKE, TWO_FA_ENABLE/DISABLE entries with ip/userAgent/requestId and no secrets.
+46. Logs never contain cookie values, passwords or tokens (grep test on captured logs from the auth e2e suite).
+
+### C. Public site bootstrap, settings, navigation, contact info
+47. `GET /public/site` -> 200 with: siteName "Barathon Trading", logo media (seeded from `logo.png`), headerCta label "Let's Talk", search placeholder "Search Products...", footerBlurb, copyright with the current year resolved, footerCredit rendering to "Developed by Dagim Meseret", social links (hidden ones excluded), 3 phone channels and the email, head office address "Bole Road, Wollo Sefer / P.O.Box 62716 / Addis Ababa, Ethiopia", menus for HEADER/FOOTER_QUICK/FOOTER_PRODUCTS.
+48. HEADER menu order is Home, About Us, Products, Service, Contact Us; Products item contains the published products (max `config.limit`) as children with working `href`s `/products/{slug}`.
+49. FOOTER_PRODUCTS contains exactly the first 5 products by `sortOrder`.
+50. Admin `PUT /admin/menus/HEADER/items` reorders/hides an item; the change appears in `/public/site` within 5 s; nesting depth 3 -> 422.
+51. Admin changes `footerCredit.name`; public site reflects; response never contains the text "xyberlabs" anywhere in seeded data (grep over `GET /public/*` responses).
+52. Admin `PATCH /admin/settings/header` sets CTA href `tel:+251911514558` (`hrefType: TEL`) -> public reflects.
+53. SocialLink cannot be set `visible=true` without a URL (422); with URL it appears in `/public/site` ordered by `sortOrder`.
+54. ContactChannel create/reorder/hide works and public output preserves order and excludes hidden.
+55. Office with `mapEmbedUrl` host not in allow-list -> 422.
+56. `GET /public/ui-strings` returns defaults for keys never overridden (e.g. `contact.submit` = "Send Message"); admin override changes the value; deleting the override restores the default.
+57. Announcement bar with `endsAt` in the past is omitted from `/public/site`.
+58. Maintenance flag is exposed but public API continues to respond.
+59. Settings update with invalid hex color -> 422; with `expectedVersion` stale -> 409 `VERSION_CONFLICT`.
+60. Settings revision list shows an entry per save; restoring a revision reverts values and creates a new revision.
+
+### D. Pages and homepage composition
+61. `GET /public/pages/home` returns blocks in order: HERO_CAROUSEL, BRANDS_MARQUEE, IMAGE_TEXT, VIDEOS_GRID, SERVICES_GRID, each with `resolved` data (8 slides from featured products, 9 brands, 8 videos with embed URLs, 2 services).
+62. Setting a block `visible=false` removes it from public output; reordering via `PATCH /admin/pages/:id/blocks/reorder` changes order.
+63. Creating a block with invalid `data` (e.g. `HERO_CAROUSEL.autoplayMs=10`) -> 422 `BLOCK_INVALID` with zod issue paths; unknown extra key -> 422.
+64. `GET /admin/block-types` returns all 21 block types with JSON Schema and default data.
+65. `GET /public/pages/about` returns `tabNav` equal to [CEO Message, Philosophy, Baraton Trade LLC, Baraton Trade PLC] in that order, blocks LEADER_MESSAGE, TIMELINE, MISSION_VISION, SUBSIDIARIES resolved.
+66. CEO message text equals the source text (typos fixed) and `name`/`photo` are null until set; setting photo and name in admin shows in public response.
+67. Mission has exactly 4 published items; Vision text equals source; VALUE items (DRAFT) are not in public output until published.
+68. Timeline returns 4 entries in order (2007, 2007 - 2024, 2019, Today).
+69. System pages cannot be deleted (409 `SYSTEM_RESOURCE_PROTECTED`) and their slug cannot be changed.
+70. Creating custom page "Privacy Policy" with RICH_TEXT block, publishing it: `GET /public/pages/privacy-policy` 200; before publishing 404; reserved slug `admin` -> 409 `SLUG_RESERVED`.
+71. Rich text containing `<script>alert(1)</script><img src=x onerror=alert(1)>` is stored sanitized (no script, no `onerror`) and the response contains none of those strings.
+72. Page SEO fields (title, description, OG image, canonical, noindex) saved and returned in `seo`; `noindex=true` yields `robots: "noindex,follow"` (`noindex,nofollow` when `nofollow` is also set) and the page is excluded from sitemap.
+73. A block referencing an unpublished product silently omits it from `resolved` and admin read shows a `warnings` item.
+74. Scheduling a page for 2 minutes ahead: invisible before, visible after the job runs (<= 1 min delay), `publishedAt` equals scheduled time.
+
+### E. Catalogue: products, categories, brands, services, videos
+75. `GET /public/products` -> 8 products, default sort by `sortOrder` (FURUKAWA Rock Drills first), `meta.total=8`, `facets` present; cards contain image variants/srcset when images were imported.
+76. `GET /public/products/furukawa-rock-drills` -> 200 with `contentHtml` (HTML, no leading duplicate H1), brand link, category, `seo` with canonical `https://<site>/products/furukawa-rock-drills`, `jsonLd` containing a `Product` and `BreadcrumbList`.
+77. `GET /public/products/unknown` -> 404 `NOT_FOUND`.
+78. Filters: `?category=filtration` returns only Elsasser; `?brand=montabert` only Montabert; `?country=JP` returns Furukawa, Air Compressor, Nakayama; `?q=compressor` returns Air Compressor first; `?featured=true` returns 8; invalid `pageSize=1000` -> 422.
+79. `GET /public/products/search?q=mont` returns Montabert (prefix); `q=a` -> 400; `q=carmix` returns Carmix; accent/case-insensitive (`q=MONTABERT`); 61st request in a minute -> 429.
+80. Searching a word that exists only in `contentHtml` (e.g. "earthquake" from Nakayama) finds Nakayama crushers (weight C).
+81. Typo tolerance: `q=montabrt` returns Montabert via trigram.
+82. Create product via admin with only `title` + `shortDescription` -> 201, status DRAFT, slug auto-generated, not visible publicly; publish -> visible; unpublish -> 404 publicly.
+83. Duplicate title creates unique slug with `-2` suffix; explicit duplicate slug -> 409 `SLUG_TAKEN`.
+84. Changing a published product's slug creates an automatic 301 redirect from `/products/old` to `/products/new` (visible in `/public/redirects` and `/public/redirects/resolve?path=/products/old`).
+85. Product gallery `PUT /admin/products/:id/images` orders respected in public detail; referencing a deleted media -> 422.
+86. Specs and documents: `PUT .../specs` and `.../documents` appear in public detail; document download endpoint returns 302 and increments `downloadCount`; only PDF media accepted (image media -> 422).
+87. Related products: manual list honored; when none, automatic related (same category/brand, max 4) returned and never includes itself.
+88. Soft delete: `DELETE /admin/products/:id` removes from public and list; `GET /admin/products?deleted=true` shows it; `restore` brings it back as previous status; `purge` only works on trashed items.
+89. Reorder: `PATCH /admin/products/reorder` with full id list changes public order; with missing/extra id -> 422.
+90. Optimistic concurrency: two PATCHes with the same `expectedVersion` -> second gets 409.
+91. Revisions: each update creates a revision; `GET .../revisions` lists them; restoring revision N restores fields and creates a new revision.
+92. Brands: `GET /public/brands` returns 9 brands in seeded order; `kind=PRINCIPAL` returns Furukawa and AIRMAN only; `GET /public/brands/montabert` includes description paragraphs as HTML, video (embed URL `https://www.youtube-nocookie.com/embed/tW0_L_POXeM`), country FR, related products.
+93. Brand "Walter Gerätebau" has no video (invalid source link `a` skipped) and seed report lists it.
+94. Brand names in seed are cleaned (`Sumitomo Construction Machinery Co., Ltd.`), and the Sumitomo short description no longer contains "is was".
+95. Services: `GET /public/services` -> 2 services with features (5 and 4); feature titles like "Drill Bits"; "Predictive Maintenance" spelled correctly (no "redictive").
+96. Videos: `GET /public/videos?featured=true` -> 8 items; each has `youtubeId`, `embedUrl`, `thumbnailUrl`, `startSeconds` (35 for Nakayama, 11 for Sumitomo); creating a video with URL `https://youtu.be/dQw4w9WgXcQ?t=42` stores id + start 42; `https://example.com/x` -> 422 `INVALID_YOUTUBE_URL`.
+97. Category CRUD: seeded 8 categories; deleting a category with products sets those products' category to null (not cascade) and returns 200/204.
+98. Missing images (failed downloads) do not break any public endpoint (`image: null`) and appear in `/admin/dashboard.warnings.missingImages`.
+99. Seeded `legacyId` redirects: `GET /public/redirects/resolve?path=/product/67e8f5735d8bb94eec4cdf33` -> match to `/products/furukawa-rock-drills` type MOVED_301.
+
+### F. Editorial, testimonials, FAQ, subsidiaries, leadership
+100. Posts: create, schedule, publish; `GET /public/posts` sorted by `-publishedAt`; scheduled posts hidden until time; category/tag filters work; `GET /public/posts/:slug` includes prev/next.
+101. Post `readingMinutes` computed from body (200 wpm).
+102. FAQ groups: public output ordered; `seo.jsonLd` for FAQ page includes `FAQPage` when FAQ block rendered (via `GET /public/faqs`, field `jsonLd`).
+103. Testimonials CRUD; rating outside 1..5 -> 422; hidden ones excluded publicly.
+104. Subsidiaries: `GET /public/subsidiaries` returns LLC and PLC with lists and `partnerBrands` (Furukawa, AIRMAN) and the intro texts matching source.
+105. Only one primary LeaderMessage: setting another `isPrimary=true` unsets the previous atomically; two concurrent requests never leave two or zero primaries.
+106. Stats/timeline/core-values/hero-slides: CRUD + reorder + visibility + (hero slide) schedule window (`startsAt` in future hides it).
+
+### G. Media (MinIO)
+107. Upload JPEG 3000x2000 via `POST /admin/media` -> 201; response has `url`, `width`, `height`, `blurhash`, `dominantColor`, `variants` with at least `w320.webp`, `w640.webp`, `thumb.webp` immediately; `processingStatus` becomes READY and larger variants + avif appear within 30 s.
+108. Object keys follow `media/{yyyy}/{mm}/{mediaId}/v1/...`; original filename does not appear in image keys.
+109. Variants never exceed original width (upload 500 px image -> no w640+).
+110. EXIF GPS data absent in stored original and variants.
+111. Uploading `.exe` renamed `.jpg` -> 415; PNG with `.jpg` extension -> 415 (mismatch); 13 MB image -> 413; 26 MB PDF -> 413; 9000x9000 px image -> 422/413 limit error; corrupt image -> 422.
+112. SVG with `<script>` and `onload=` is accepted only after sanitization: stored file contains neither; SVG with external `xlink:href` stripped.
+113. PDF containing `/JavaScript` -> 415 (rejected); normal PDF accepted as DOCUMENT; public PDF served inline URL under `/media/...`; `PRIVATE` PDF not accessible via `/media/...` (403/404 from MinIO) but downloadable via `GET /admin/media/:id/download` with auth.
+114. Anonymous request to MinIO `private-docs` object -> denied; listing `public-media` bucket anonymously -> denied (no ListBucket).
+115. Bulk upload of 3 files with one invalid -> HTTP 207 with per-file results.
+116. `PATCH /admin/media/:id` updates alt/caption/focal point; entities referencing it show alt in public DTO (`alt`), `null` when unset.
+117. Media in use: `DELETE` -> 409 `MEDIA_IN_USE` listing usage; with `?force=true` -> 204 and FKs nulled; unused media delete removes objects from MinIO (verify keys gone).
+118. Replace file `PUT /admin/media/:id/file` -> new `v2` key path, old objects removed, same `id`, URL changes; kind mismatch -> 422.
+119. Duplicate upload (same sha256) is accepted and response lists `duplicates`.
+120. Media usage index: after setting a product hero image and embedding that image in `contentHtml`, `GET /admin/media/:id` lists both usages; removing them clears usage.
+121. `GET /admin/media?unused=true` lists unreferenced media older than threshold.
+122. Failure injection: stop MinIO during upload -> 5xx/`503` and no `Media` row persisted; DB failure after object write -> object deleted (compensation).
+123. Public media responses (via proxy) carry `Cache-Control: public, max-age=31536000, immutable`.
+
+### H. Contact form and inbox
+124. `POST /public/contact` valid body -> 201 `{id, reference}` with `reference` matching `^BT-\d{6}-[0-9A-Z]{4}$`; message stored `NEW`; notification email queued to configured recipient with `Reply-To` sender; email body HTML-escapes message.
+125. Missing/invalid fields -> 422 with per-field `details`; message < 10 chars -> 422; phone with letters -> 422; extra fields -> 422.
+126. Honeypot `website` filled -> 201 but nothing stored (DB count unchanged), no email.
+127. Submission < 3 s after `formStartedAt` -> stored as SPAM, no email, still 201.
+128. Rate limit: 6th submission within an hour from same IP -> 429; 4th within an hour with same email -> 429.
+129. Captcha enabled and missing/invalid token -> 403 `CAPTCHA_FAILED`; valid token -> 201; provider timeout -> accepted with spam score +3 (logged).
+130. Spam scoring: message with 3 URLs and spam phrase -> stored with status SPAM and reasons; not counted in unread count.
+131. `productSlug` of a real product stores `productId` + snapshot title; unknown slug is ignored.
+132. HTML in name/message (`<b>x</b><script>`) is stripped to text; admin API returns plain text; CSV export neutralizes leading `=`.
+133. Email failure (SMTP down) does not fail submission; `notificationStatus` ends `FAILED` after retries and the message remains in inbox.
+134. Admin inbox: list filter by status/starred/q; counts per status in `meta.counts`; opening a NEW message sets READ; status/star changes audited; `unread-count` matches.
+135. Reply: `POST /admin/messages/:id/reply` queues an email to the sender, adds a REPLY note, status REPLIED, `repliedAt` set.
+136. Notes add/delete; bulk actions (`archive`, `spam`, `delete`) affect only listed ids and return `affected`.
+137. Mark spam / not spam toggles status and list membership.
+138. CSV export returns `text/csv`, UTF-8 BOM, honours filters.
+139. Message IPs older than 90 days are truncated to /24 by job (test with time travel).
+
+### I. SEO, redirects, sitemap, robots
+140. Each public detail/page response has `seo.title` using the template `"%s | Barathon Trading"` unless an explicit `metaTitle` is set (explicit used verbatim with template only if configured), `canonical` absolute, `openGraph.image` falls back to entity image then site default.
+141. `jsonLd` generated: home has `Organization` (name, logo, contactPoint phones, address) + `WebSite`; product has `Product` (+ `brand`) and `BreadcrumbList`; post has `Article`; override `jsonLd` replaces generated; override missing `@context` schema.org -> 422; override > 16 KB -> 422.
+142. `noindex` on an entity sets `robots` and excludes it from `/public/sitemap`.
+143. `GET /public/sitemap` contains home, about, products index, all 8 product URLs, 9 brand URLs, 2 service URLs, contact; draft/trashed entities absent; `lastmod` = `updatedAt`; XML variant is valid XML and < 50k URLs.
+144. `GET /public/robots.txt` includes `Disallow: /admin`, `Disallow: /api`, `Sitemap:` line; with `siteNoindex=true` returns `Disallow: /`.
+145. Redirect CRUD: create `/old` -> `/about` 301; `resolve` returns it; creating `/a` -> `/b` and `/b` -> `/a` -> 409 `REDIRECT_LOOP`; target `//evil.com` or `javascript:` -> 422; absolute URL on non-allowed host -> 422.
+146. Redirect import dry-run reports per-row errors without writing; non-dry-run writes valid rows; export CSV round-trips.
+147. `POST /admin/redirects/test` shows chain `/a -> /b -> /c`.
+148. `/public/slugs/products` returns all 8 slugs with `updatedAt`; unknown type -> 404.
+
+### J. Revalidation, caching, jobs
+149. Publishing a product triggers exactly one signed POST to `WEB_REVALIDATE_URL` within ~3 s containing tags `products`, `product:{slug}`, `sitemap` (and `page:home` if referenced); signature = HMAC-SHA256 of raw body with `REVALIDATE_SECRET`; rapid 5 edits within 2 s coalesce into one call.
+150. Webhook target down: job retries with backoff (5 attempts), `RevalidationLog` records FAILED; admin save still succeeds.
+151. `POST /admin/revalidate {scope:'ALL'}` -> 202 and a log entry.
+152. Public GET returns `ETag`; repeat with `If-None-Match` -> 304; response `Cache-Control` has `s-maxage=60, stale-while-revalidate=300`; admin/auth responses `no-store`.
+153. In-process cache invalidation: after admin update, next public GET (no waiting) reflects the change.
+154. `publish-scheduled` job idempotent when two instances/ticks overlap (single publish, one audit entry).
+155. Jobs survive restart: queued email persists across API restart and is delivered.
+156. `purge-trash` removes items trashed > 30 d and their child rows; `purge-audit` removes logs > 365 d; expired tokens purged.
+
+### K. Admin dashboard, audit, import/export, preview
+157. `GET /admin/dashboard` returns counts consistent with DB, `messages.new`, `recentActivity` (<= 10), `upcomingScheduled`, `health`, `warnings.missingImages` (lists entities without image).
+158. Every admin create/update/delete/publish/reorder/restore writes an `AuditLog` row with actor, entity, summary and field-level `diff` (no secrets); `GET /admin/audit-logs` filters by action/entity/date and paginates.
+159. Audit diff for rich-text fields is truncated to 500 chars per side.
+160. Export: `GET /admin/export` returns bundle `version:1` with settings, pages+blocks, products (+children), brands, services, videos, posts, menus, etc.; does not include users, password hashes, messages, tokens.
+161. Import dry-run of the exported bundle on an empty DB reports `created` counts equal to exported counts and writes nothing; apply (`dryRun=false&confirm=IMPORT`) recreates content; re-import is idempotent (updated/skipped, no duplicates); invalid entity in bundle -> listed in `errors[]` and nothing applied when `mode` strict.
+162. Preview token: `POST /admin/preview` for a DRAFT product -> token; `GET /public/preview/PRODUCT/:id?token=` returns the draft with `no-store`; expired/invalid token -> 401; token for a different id -> 403.
+163. Trash listing `GET /admin/trash` aggregates all entity types; `POST /admin/trash/purge` requires `confirm=PURGE`.
+164. `POST /admin/system/test-email` sends via SMTP transport (captured in test) and is throttled.
+
+### L. Seed and data quality
+165. `seed` on empty DB creates: 8 products, 8 categories, 9 brands, 8 videos, 2 services (9 features), 2 subsidiaries, 4 timeline entries, 4 mission items, 1 leader message, 4 contact channels, 1 office (+1 hidden), 4 social links (hidden), 3 menus populated, home and about pages, UI strings; second run creates nothing new (idempotent).
+166. Seed does not overwrite an admin-edited row (edit a product title, rerun seed -> title unchanged).
+167. Typo cleanup: no seeded text contains `Bussiness`, `FURKAWA`, `redictive`, `has resented`, `is was formed`, `Geratebou`; `seed-report.json` lists each fix with before/after.
+168. Country normalisation: Monark country `SE`/Sweden/Ockelbo; Furukawa brand JP/Tokyo; AIRMAN JP/Saitama.
+169. Markdown conversion: Nakayama product content (5.6 KB) renders headings/lists/bold as sanitized HTML; `**Carmix**` becomes `<strong>`.
+170. `seed:assets` with Cloudinary unreachable completes with exit code 0, report lists failures, entities have null images; with reachable host all images become Media with variants; a non-allow-listed host in the manifest is refused.
+171. `cli seed` with `ADMIN_BOOTSTRAP_*` and no users creates one admin with `mustChangePassword=true`; with an existing user it creates none.
+
+### M. Security regression
+172. SQL injection probes (`q=' OR 1=1--`, `sort=title;drop table`, `category=%27`) never error 500 and never alter results; invalid `sort` field -> 422.
+173. Stored XSS probes in every text/HTML field of every admin DTO come back escaped/sanitized (plain-text fields stored literally but flagged for escaping; HTML fields sanitized).
+174. SSRF: no endpoint accepts a URL that the server fetches (code review checklist + test that `mapEmbedUrl`, `youtube url`, `websiteUrl`, `redirect target` are never requested by the API — verified by network-deny test environment).
+175. IDOR: all IDs are UUIDv7; admin session of user A cannot delete session of user B (404).
+176. Mass assignment: sending `role`, `id`, `passwordHash`, `deletedAt`, `status` (where not allowed) in DTOs is rejected by `forbidNonWhitelisted`.
+177. Rate limit headers (`Retry-After`) present on 429s; limits keyed by real client IP behind proxy (`X-Forwarded-For`) not by proxy IP.
+178. File upload polyglot (GIF/JS) is re-encoded so stored file is a valid image only; PDF with embedded JS rejected.
+179. Cookies in production (`COOKIE_SECURE=true`) use `__Host-`/`__Secure-` prefixes, no `Domain`, `Secure` flag set.
+180. `npm audit`/`pnpm audit --prod` shows no high/critical advisories at release.
+181. Container runs as non-root and root filesystem is read-only; Postgres/MinIO ports are not reachable from outside the compose network (port scan from outside shows only 80/443/22).
+
+### N. Operations
+182. Backup job produces a restorable `pg_dump` (verified by the weekly restore check writing `LAST_RESTORE_CHECK=OK`) and mirrors both buckets; killing the backup mid-run leaves previous backups intact.
+183. Restore drill: dropping the DB and restoring the latest dump + MinIO mirror yields identical product/brand counts and working images.
+184. `prisma migrate deploy` on an empty DB succeeds; running twice is a no-op; schema drift check (`migrate diff`) is clean in CI.
+185. Compose `up` from scratch on a fresh VPS (documented steps) results in healthy `api`, `web`, `postgres`, `minio`, `proxy` and HTTPS certificate issued.
+186. `GET /media/...` through the proxy serves a public image; `/minio` console is not reachable from the internet.
+187. Performance smoke (k6): public GET set p95 < 250 ms, search p95 < 150 ms, error rate < 0.5 % under 50 VUs.
+
+---
+
+# 10. Implementation work breakdown and API contract summary
+
+## 10.1 Schema deltas referenced elsewhere in this document (MUST be in the Prisma schema)
+
+| Table | Addition |
+|-------|----------|
+| `User` | `totpLastStep Int?`, `pepperVersion Int @default(1)` |
+| `PasswordHistory` | `id`, `userId FK cascade`, `hash text`, `createdAt`; keep last 5 per user |
+| `Brand`, `Product` etc. | media FK columns are named `<field>MediaId` and must be listed in `MEDIA_REFERENCES` for usage tracking |
+| `MediaRef` | as defined in 3.6 |
+| `ContactMessage` | `reference`, `notificationStatus` as defined in 3.12 |
+Every content table listed in 3.10-3.12 with `deletedAt` participates in the soft-delete extension.
+
+## 10.2 Phases and milestones
+
+Each phase ends with a demoable state, passing tests for that phase, and updated OpenAPI snapshot. Estimates are for one implementer.
+
+| Phase | Name | Deliverable | Depends on | Est. |
+|-------|------|-------------|------------|------|
+| 0 | Foundations | pnpm monorepo wiring, `apps/api` Nest skeleton, config/env validation, Prisma + first migration (extensions), PrismaService + soft-delete extension, pino, global filters/pipes, health endpoints, Swagger, Dockerfile, dev compose (postgres, minio, mailpit), CI pipeline, `packages/contracts` scaffold | - | 3 d |
+| 1 | Auth | Auth module complete (4): login, refresh rotation, logout, sessions, CSRF/Origin guards, lockout, forgot/reset/change password, mail module + templates, CLI `admin:*`, audit module basic, throttling, 2FA (can be last in phase) | 0 | 6 d |
+| 2 | Storage and media | MinioService, bucket init, media upload pipeline (sharp, SVG/PDF handling, variants job via pg-boss), media admin API, folders, MediaRef/usage, orphan job | 0,1 | 6 d |
+| 3 | Core CMS plumbing | `common` DTOs, slug service, sanitizer, SeoMeta service, revisions, events -> revalidation + cache tags, jobs module, publish-scheduled job, status workflow helpers, generic admin CRUD base classes | 1,2 | 5 d |
+| 4 | Site-level content | Settings, UI strings, contact info (channels/offices/social), menus (incl. dynamic items), redirects, public `/site`, `/ui-strings`, `/menus`, `/redirects*` | 3 | 5 d |
+| 5 | Catalogue | Categories, brands, products (+images/specs/documents/related), services, videos (YouTube parser), public catalogue endpoints, search (FTS migration + service), facets | 3,4 | 8 d |
+| 6 | Pages and homepage | Page + PageBlock, zod block schemas in contracts, block resolvers, hero slides, stats, timeline, core values, leader messages, team, subsidiaries, public `/pages/:slug`, tabNav, `/admin/block-types` | 4,5 | 8 d |
+| 7 | Editorial and extras | Posts/categories/tags, testimonials, FAQs, sitemap/robots/slugs endpoints, JSON-LD generation, preview tokens | 5,6 | 5 d |
+| 8 | Contact pipeline | Public submit, honeypot/time-trap/captcha/spam scoring, messages inbox admin API, reply email, CSV export, retention jobs | 1,3 | 4 d |
+| 9 | Seed and migration of legacy content | `seed` + `seed:assets`, typo-fix engine, markdown conversion, legacy redirects, seed report, seed e2e test | 4-8 | 4 d |
+| 10 | Dashboard, audit UI API, import/export, trash, system | `/admin/dashboard`, audit query API, export/import, trash endpoints, system info/test-email | 3-9 | 4 d |
+| 11 | Hardening and ops | Security review pass (checklist M), rate-limit tuning, metrics, Compose prod files, Caddyfile, backup container + restore drill, docs/runbooks, k6 smoke, final OpenAPI snapshot | all | 5 d |
+| 12 (later) | Amharic i18n | translation tables, locale param support, UiString am, sitemap alternates | 11 | 6 d |
+
+Frontend integration checkpoints: after Phase 4 (site bootstrap + menus), after Phase 5 (catalogue), after Phase 6 (home/about), after Phase 8 (contact), and Phase 1 for admin login. Backend publishes the OpenAPI snapshot at each checkpoint.
+
+## 10.3 Task list (ordered; each task is independently verifiable; IDs are referenced in PRs)
+
+### Phase 0
+- T0.1 Create `apps/api` with Nest 11, TS strict, ESLint/Prettier, path aliases (`@/`).
+- T0.2 Implement `config` module: zod `EnvSchema` from 8.5, `*_FILE` secret loading, production sanity checks.
+- T0.3 Prisma init, enums (3.2), `User`..`AuthSession` tables, migration 0001 with extensions (`pgcrypto, citext, pg_trgm, unaccent`).
+- T0.4 `PrismaService` with soft-delete client extension + tests.
+- T0.5 Global `AllExceptionsFilter` implementing 6.1.4; request-id middleware; pino logger with redaction.
+- T0.6 Global `ValidationPipe`, versioning, `helmet`, `cookie-parser`, CORS config, `trust proxy`.
+- T0.7 `HealthModule` (live/ready), Swagger setup + openapi snapshot script.
+- T0.8 Dockerfile (multi-stage), `deploy/compose.dev.yml` (postgres, minio, minio-init, mailpit), `README` run steps.
+- T0.9 CI workflow: install, lint, typecheck, unit, integration (Testcontainers), e2e, build.
+- T0.10 `packages/contracts` scaffold exporting enums (`ContentStatus`, `BlockType`, ...) used by the API.
+
+### Phase 1
+- T1.1 `CryptoService` (AES-GCM), `PasswordService` (argon2id+pepper, policy, zxcvbn, HIBP), unit tests.
+- T1.2 `TokenService` (JWT sign/verify, opaque token gen/hash), cookie helper (`CookieNames`, set/clear with prod prefixes).
+- T1.3 `LocalStrategy`, `JwtStrategy`, `RefreshStrategy`, `TotpChallengeStrategy` + guards, `@Public`, `@CurrentUser`, `RolesGuard`, global guard order.
+- T1.4 `SessionService`, `AuthService` login/refresh/logout/logout-all with rotation + reuse detection (4.3.3) + tests for race/reuse.
+- T1.5 `LockoutService` + audit events; throttler named configs (4.5).
+- T1.6 `CsrfGuard` + `OriginGuard` + `CsrfService`.
+- T1.7 `MailModule` (nodemailer transport, Handlebars templates: `password-reset`, `password-changed`, `new-login`, `contact-notification`, `contact-auto-reply`, `message-reply`, `test`, with text versions), `EmailLog`, pg-boss `send-email` job.
+- T1.8 Password reset flow + change password + password history.
+- T1.9 Sessions list/revoke endpoints; `GET /auth/me`; `mustChangePassword` and `REQUIRE_2FA` guards.
+- T1.10 TOTP 2FA endpoints + recovery codes.
+- T1.11 CLI (`nest-commander`): `admin:create`, `admin:list`, `admin:reset-password`, `admin:unlock`, `admin:2fa-disable`.
+- T1.12 `AuditModule` (service + interceptor + `@Audit`) and `GET /admin/audit-logs`.
+- T1.13 Auth e2e suite covering checklist B.
+
+### Phase 2
+- T2.1 `MinioService` + `ensureBuckets` + policy; integration test with Testcontainers MinIO.
+- T2.2 `Media`, `MediaVariant`, `MediaFolder`, `MediaRef` schema + migration.
+- T2.3 Upload endpoint (multer memory), sniffing (`file-type`), validation matrix (5.4), SVG sanitizer, PDF scanner.
+- T2.4 `ImageProcessor` (sharp pipeline 5.5), blurhash/dominant/LQIP, sync + async variants via `image-variants` job.
+- T2.5 Media admin CRUD (list/search/filters, patch, replace, delete with usage, bulk, folders, regenerate, download).
+- T2.6 `MediaUsageService` + `MEDIA_REFERENCES` + HTML scanner for `/media/` URLs; `media-orphans` job.
+- T2.7 Public `MediaDto` serializer (absolute URLs, srcset strings, alt semantics).
+- T2.8 Media e2e + failure-injection tests (checklist G).
+
+### Phase 3
+- T3.1 `SlugService` (generate, reserved list, uniqueness, history->redirect hook).
+- T3.2 `HtmlSanitizer` + `@RichText()` DTO decorator + tests with XSS corpus.
+- T3.3 `SeoMeta` model/service (`upsertFor`, `resolve`, JSON-LD builders: Organization, WebSite, Product, BreadcrumbList, Article, FAQPage), `SeoMetaDto` validation.
+- T3.4 `RevisionsService` + `ContentRevision`; generic `snapshot/restore` contract per resource.
+- T3.5 Domain events + `RevalidationService` (debounce, HMAC webhook, retries, log) + `revalidation-map.ts` + admin revalidate endpoints.
+- T3.6 `CacheService` (LRU + tags) + `ResponseCacheInterceptor` + ETag/Cache-Control interceptor for public controllers.
+- T3.7 Base abstractions: `BaseAdminService<T>` (CRUD, soft delete, restore, purge, status transitions, reorder, optimistic concurrency, warnings), shared DTOs (`PaginationQueryDto`, `ReorderDto`, `ScheduleDto`, `BulkActionDto`).
+- T3.8 `publish-scheduled`, `purge-trash`, `purge-audit`, `purge-expired-tokens` jobs.
+- T3.9 Preview module (sign/verify tokens, admin + public endpoints).
+
+### Phase 4
+- T4.1 `SiteSettings` + zod sub-schemas + admin GET/PUT/PATCH group endpoints + revisions + seed defaults.
+- T4.2 `UiString` + defaults file + admin bulk upsert + public merged map.
+- T4.3 `ContactChannel`, `Office` (map host allow-list), `SocialLink` modules.
+- T4.4 `Menu`/`MenuItem` modules, tree validation, dynamic item expansion (`DYNAMIC_PRODUCTS` etc. through read services/interfaces to avoid circular deps; implemented via a `MenuItemResolver` registry that catalogue modules register into).
+- T4.5 `Redirect` module (normalisation, loop detection, resolve, CSV import/export, auto redirects on slug change, hit counters sampled).
+- T4.6 `GET /public/site` aggregator + cache tags `site`.
+
+### Phase 5
+- T5.1 `ProductCategory`, `Brand` modules (admin + public).
+- T5.2 `Product` + children replace endpoints; public list/detail/facets; related logic.
+- T5.3 FTS migration (3.11), `SearchService`, `/public/products/search`, `/public/search`.
+- T5.4 `Service` + `ServiceFeature`; `Video` + `YoutubeParser` (formats: watch, embed, youtu.be, shorts, `t=`/`start=`; nocookie embed URL building).
+- T5.5 Public DTO projections (`ProductCardDto`, ...), JSON-LD for products.
+- T5.6 e2e suites E.
+
+### Phase 6
+- T6.1 Block zod schemas in `packages/contracts` + `GET /admin/block-types` (zod -> JSON Schema via `zod-to-json-schema`).
+- T6.2 `Page`/`PageBlock` modules, blocks CRUD/reorder/replace, `by-key`, protection of system pages.
+- T6.3 `BlockResolverRegistry` + 21 resolvers; unresolved-reference warnings.
+- T6.4 `HeroSlide`, `Stat`, `TimelineEntry`, `CoreValue`, `LeaderMessage`, `TeamMember`, `Subsidiary` modules (+ public endpoints where listed).
+- T6.5 `tabNav` builder; public `/pages/:slug`; page SEO/JSON-LD; sitemap integration.
+- T6.6 e2e suites D, F.
+
+### Phase 7
+- T7.1 Posts/categories/tags (reading time, prev/next, related); public endpoints.
+- T7.2 Testimonials, FAQ groups + FAQs (nested admin routes).
+- T7.3 `SitemapService`, `RobotsService`, `/public/slugs/:type`.
+- T7.4 SEO preview endpoint `GET /admin/seo-preview`.
+
+### Phase 8
+- T8.1 `ContactMessage` schema; public submit pipeline (7.2), `SpamService`, `CaptchaService`.
+- T8.2 Admin messages API (6.3.8), notes, reply email, bulk, CSV export, unread count.
+- T8.3 Jobs: `contact-notification` email, IP truncation, optional message retention.
+- T8.4 e2e suite H.
+
+### Phase 9
+- T9.1 Seed framework (idempotent upserts by natural key, report writer).
+- T9.2 Text cleanup engine (`typo-fixes.json`), country normaliser, Markdown converter, YouTube link normaliser.
+- T9.3 Seed data files (3.13.3) and mapping code for products/brands/services/videos.
+- T9.4 `seed:assets` downloader (host allow-list, retries, manifest) using the media pipeline.
+- T9.5 Legacy redirects generation.
+- T9.6 Seed e2e (checklist L).
+
+### Phase 10
+- T10.1 Dashboard service/endpoint (6.3.2).
+- T10.2 Export/import services (bundle schema versioned, dry-run, confirm token).
+- T10.3 Trash aggregation + purge endpoints; system info/test-email.
+
+### Phase 11
+- T11.1 Run full security checklist M; fix findings; ZAP baseline.
+- T11.2 `deploy/compose.yml`, `compose.prod.yml`, `Caddyfile`, `minio-init`, backup image + scripts + restore drill + `README-ops.md`.
+- T11.3 Metrics + Sentry wiring, log review.
+- T11.4 k6 smoke script; tune indexes/cache.
+- T11.5 Freeze OpenAPI snapshot, tag release `v1.0.0`.
+
+## 10.4 Definition of done (per task)
+Code merged with: unit/integration/e2e tests for the new behaviour, OpenAPI decorators present, DTO validation decorators complete, audit + revision + event wiring (for content), no lint/type errors, migrations included, relevant checklist items verified, and docs of any new env var added to `.env.example` and 8.5.
+
+## 10.5 API contract summary (TypeScript-style DTOs the frontend can rely on)
+
+Shared types are exported from `packages/contracts`. Fields marked `| null` are always present (explicit null); optional (`?`) fields may be absent. All `*Html` strings are already sanitized and safe to inject with `dangerouslySetInnerHTML` inside a typography container.
+
+```ts
+// ---------- primitives ----------
+type UUID = string; type ISODate = string;
+type ContentStatus = 'DRAFT'|'SCHEDULED'|'PUBLISHED'|'ARCHIVED';
+interface Paginated<T> { data: T[]; meta: { page: number; pageSize: number; total: number; totalPages: number } }
+interface ApiError { statusCode: number; code: string; message: string; details?: { field: string; message: string; code?: string }[]; requestId: string; timestamp: ISODate; path: string }
+
+// ---------- media ----------
+interface MediaVariantDto { label: string; format: 'webp'|'avif'|'jpeg'|'png'; width: number; height: number; url: string }
+interface MediaDto {
+  id: UUID; kind: 'IMAGE'|'SVG'|'ICON'|'DOCUMENT';
+  url: string;                       // original (absolute)
+  alt: string | null; caption: string | null;
+  width: number | null; height: number | null;
+  blurhash: string | null; dominantColor: string | null; lqip: string | null;
+  focal: { x: number; y: number } | null;
+  variants: MediaVariantDto[];
+  srcset: { webp: string; avif: string | null };   // ready-to-use srcset strings
+  mimeType: string; sizeBytes: number;
+}
+
+// ---------- seo ----------
+interface SeoDto { /* see 6.2.0 */ }
+interface SeoMetaInput {
+  metaTitle?: string | null; metaDescription?: string | null;
+  ogTitle?: string | null; ogDescription?: string | null; ogImageId?: UUID | null;
+  twitterCard?: 'SUMMARY'|'SUMMARY_LARGE_IMAGE';
+  canonicalUrl?: string | null; noindex?: boolean; nofollow?: boolean; keywords?: string | null;
+  jsonLd?: object | object[] | null;
+}
+
+// ---------- site bootstrap ----------
+interface SiteDto {
+  siteName: string; legalName: string | null; tagline: string | null; locale: 'en';
+  logoLight: MediaDto | null; logoDark: MediaDto | null; favicon: MediaDto | null; appleTouchIcon: MediaDto | null; defaultOgImage: MediaDto | null;
+  brandColors: { primary: string; accent: string; themeColor: string };
+  headerCta: { enabled: boolean; label: string; hrefType: 'PATH'|'TEL'|'MAILTO'|'URL'; href: string; icon: 'phone'|'arrow'|'none' };
+  search: { enabled: boolean; placeholder: string };
+  footer: { blurb: string | null; copyright: string /* {year} resolved */; credit: { enabled: boolean; prefix: string; name: string; url: string | null } };
+  announcement: { text: string; linkLabel: string | null; href: string | null; variant: 'INFO'|'WARNING'|'PROMO' } | null;
+  maintenance: { enabled: boolean; message: string | null };
+  analytics: { ga4Id: string | null; gtmId: string | null; searchConsoleVerification: string | null };
+  seoDefaults: { titleTemplate: string; defaultTitle: string; defaultDescription: string | null; twitterHandle: string | null; siteNoindex: boolean };
+  contactForm: { consentRequired: boolean; consentText: string | null; captchaProvider: 'NONE'|'TURNSTILE'|'HCAPTCHA'; captchaSiteKey: string | null };
+  social: { id: UUID; platform: 'FACEBOOK'|'X'|'LINKEDIN'|'INSTAGRAM'|'YOUTUBE'|'TELEGRAM'|'TIKTOK'|'WHATSAPP'; url: string; label: string | null; showInFooter: boolean; showOnContactPage: boolean }[];
+  channels: { id: UUID; type: 'PHONE'|'EMAIL'|'WHATSAPP'|'FAX'; label: string | null; value: string; displayValue: string; href: string /* tel:/mailto: */; showOnContactPage: boolean; showInFooter: boolean; showInHeader: boolean }[];
+  offices: { id: UUID; name: string; isPrimary: boolean; lines: string[] /* ready-to-print address lines */; city: string; countryName: string; latitude: number | null; longitude: number | null; mapEmbedUrl: string | null; openingHours: { days: string; open: string; close: string }[] | null }[];
+  menus: Record<'HEADER'|'FOOTER_QUICK'|'FOOTER_PRODUCTS'|'FOOTER_LEGAL', MenuItemDto[]>;
+  uiStrings: Record<string, string>;
+}
+interface MenuItemDto { id: UUID; label: string; href: string; target: 'SELF'|'BLANK'; icon: string | null; children: MenuItemDto[]; viewAll?: { label: string; href: string } }
+interface MenuDto { location: string; items: MenuItemDto[] }
+
+// ---------- pages / blocks ----------
+interface PageDto {
+  id: UUID; slug: string; key: 'home'|'about'|null; title: string; template: 'HOME'|'ABOUT'|'DEFAULT';
+  heroTitle: string | null; heroSubtitle: string | null; heroImage: MediaDto | null;
+  blocks: BlockDto[]; tabNav: { label: string; anchorId: string }[];
+  updatedAt: ISODate; seo: SeoDto;
+}
+interface BlockBase { id: UUID; type: BlockType; anchorId: string | null; navLabel: string | null; showInTabNav: boolean; title?: string; subtitle?: string; background?: string; spacing?: string }
+type BlockDto =
+  | (BlockBase & { type: 'HERO_CAROUSEL'; autoplayMs: number; showThumbnails: boolean; showCounter: boolean; slides: HeroSlideDto[] })
+  | (BlockBase & { type: 'BRANDS_MARQUEE'; speed: 'SLOW'|'NORMAL'|'FAST'; linkToBrand: boolean; grayscale: boolean; brands: BrandCardDto[] })
+  | (BlockBase & { type: 'BRAND_GRID'; columns: number; brands: BrandCardDto[] })
+  | (BlockBase & { type: 'IMAGE_TEXT'; image: MediaDto | null; imagePosition: 'LEFT'|'RIGHT'|'TOP'; heading: string | null; bodyHtml: string; buttons: { label: string; href: string; variant: 'PRIMARY'|'SECONDARY'|'LINK'; target: 'SELF'|'BLANK' }[] })
+  | (BlockBase & { type: 'STATS'; stats: StatDto[] })
+  | (BlockBase & { type: 'FEATURED_PRODUCTS'; layout: 'GRID'|'CAROUSEL'; products: ProductCardDto[]; viewAll?: { label: string; href: string } })
+  | (BlockBase & { type: 'VIDEOS_GRID'; videos: VideoDto[] })
+  | (BlockBase & { type: 'SERVICES_GRID'; services: ServiceCardDto[]; cta?: { label: string; href: string } })
+  | (BlockBase & { type: 'TESTIMONIALS'; layout: 'CAROUSEL'|'GRID'; testimonials: TestimonialDto[] })
+  | (BlockBase & { type: 'LATEST_POSTS'; posts: PostCardDto[] })
+  | (BlockBase & { type: 'CTA_BANNER'; heading: string; text: string | null; backgroundImage: MediaDto | null; buttons: { label: string; href: string; variant: string }[] })
+  | (BlockBase & { type: 'TIMELINE'; orientation: 'VERTICAL'|'HORIZONTAL'; entries: TimelineEntryDto[] })
+  | (BlockBase & { type: 'LEADER_MESSAGE'; leader: LeaderMessageDto | null })
+  | (BlockBase & { type: 'MISSION_VISION'; missionTitle: string; visionTitle: string; visionHtml: string; missionItems: CoreValueDto[] })
+  | (BlockBase & { type: 'CORE_VALUES'; layout: 'CARDS'|'LIST'; values: CoreValueDto[] })
+  | (BlockBase & { type: 'SUBSIDIARIES'; layout: 'TABS'|'STACKED'; subsidiaries: SubsidiaryDto[] })
+  | (BlockBase & { type: 'TEAM'; members: TeamMemberDto[] })
+  | (BlockBase & { type: 'FAQ'; groups: FaqGroupDto[] })
+  | (BlockBase & { type: 'RICH_TEXT'; html: string })
+  | (BlockBase & { type: 'IMAGE_GALLERY'; columns: number; images: MediaDto[] })
+  | (BlockBase & { type: 'CONTACT_STRIP'; buttonLabel: string | null; buttonHref: string | null; channels: SiteDto['channels']; offices: SiteDto['offices'] });
+type BlockType = 'HERO_CAROUSEL'|'BRANDS_MARQUEE'|'BRAND_GRID'|'IMAGE_TEXT'|'STATS'|'FEATURED_PRODUCTS'|'VIDEOS_GRID'|'SERVICES_GRID'|'TESTIMONIALS'|'LATEST_POSTS'|'CTA_BANNER'|'TIMELINE'|'LEADER_MESSAGE'|'MISSION_VISION'|'CORE_VALUES'|'SUBSIDIARIES'|'TEAM'|'FAQ'|'RICH_TEXT'|'IMAGE_GALLERY'|'CONTACT_STRIP';
+
+interface HeroSlideDto { id: UUID; eyebrow: string | null; heading: string; subheading: string | null; image: MediaDto | null; mobileImage: MediaDto | null; overlayOpacity: number; buttons: { label: string; href: string }[]; href: string | null /* linked product/brand path */ }
+interface StatDto { id: UUID; value: number; prefix: string | null; suffix: string | null; label: string; icon: string | null }
+interface TimelineEntryDto { id: UUID; yearLabel: string; title: string; descriptionHtml: string; image: MediaDto | null; icon: string | null }
+interface CoreValueDto { id: UUID; group: 'MISSION'|'VALUE'; title: string; description: string | null; icon: string | null }
+interface LeaderMessageDto { id: UUID; heading: string; name: string | null; jobTitle: string | null; photo: MediaDto | null; signature: MediaDto | null; messageHtml: string }
+interface TeamMemberDto { id: UUID; name: string; jobTitle: string | null; bioHtml: string | null; photo: MediaDto | null }
+interface SubsidiaryDto { id: UUID; slug: string; name: string; legalName: string | null; countryCode: string; regionNote: string | null; tagline: string | null; introHtml: string; bodyHtml: string | null; lists: { title: string; style: 'BULLETS'|'CHECKS'|'CHIPS'; items: string[] }[]; partnerBrands: { brand: BrandCardDto; relation: 'OFFICIAL_AGENT'|'EXCLUSIVE_RIGHTS' }[]; logo: MediaDto | null; image: MediaDto | null; websiteUrl: string | null; anchorId: string }
+
+// ---------- catalogue ----------
+interface CountryDto { code: string | null; name: string | null; city: string | null }
+interface BrandCardDto { id: UUID; slug: string; name: string; kind: 'PRINCIPAL'|'PARTNER'; shortDescription: string; logo: MediaDto | null; logoDark: MediaDto | null; country: CountryDto; href: string }
+interface BrandDto extends BrandCardDto { descriptionHtml: string; heroImage: MediaDto | null; websiteUrl: string | null; videos: VideoDto[]; products: ProductCardDto[]; seo: SeoDto }
+interface CategoryDto { id: UUID; slug: string; name: string; description: string | null; image: MediaDto | null; parentSlug: string | null; productCount: number; children?: CategoryDto[]; seo?: SeoDto }
+interface ProductCardDto { id: UUID; slug: string; title: string; shortDescription: string; image: MediaDto | null; brand: { slug: string; name: string; logo: MediaDto | null } | null; category: { slug: string; name: string } | null; country: CountryDto; isFeatured: boolean; href: string }
+interface ProductDto extends ProductCardDto {
+  contentHtml: string; tagline: string | null; partNumber: string | null; inquiryEnabled: boolean;
+  gallery: { id: UUID; media: MediaDto; caption: string | null }[];
+  specs: { groupName: string | null; label: string; value: string; unit: string | null }[];
+  documents: { id: UUID; title: string; language: 'EN'|'AM'; sizeBytes: number; downloadUrl: string }[];
+  related: ProductCardDto[]; videos: VideoDto[]; publishedAt: ISODate; updatedAt: ISODate; seo: SeoDto;
+}
+interface ProductSearchHitDto { id: UUID; slug: string; title: string; shortDescription: string; image: MediaDto | null; brand: { slug: string; name: string } | null; href: string }
+interface ProductListResponse extends Paginated<ProductCardDto> { facets: { categories: { slug: string; name: string; count: number }[]; brands: { slug: string; name: string; count: number }[]; countries: { code: string; name: string; count: number }[] } }
+interface ServiceCardDto { id: UUID; slug: string; title: string; shortDescription: string; image: MediaDto | null; iconName: string | null; features: { title: string; description: string | null }[]; href: string }
+interface ServiceDto extends ServiceCardDto { bodyHtml: string | null; ctaLabel: string | null; ctaHref: string | null; seo: SeoDto }
+interface VideoDto { id: UUID; title: string; description: string | null; youtubeId: string; startSeconds: number | null; embedUrl: string; thumbnailUrl: string; thumbnail: MediaDto | null; brand: { slug: string; name: string } | null; isFeatured: boolean }
+
+// ---------- editorial ----------
+interface PostCardDto { id: UUID; slug: string; title: string; excerpt: string; cover: MediaDto | null; category: { slug: string; name: string } | null; authorName: string | null; publishedAt: ISODate; readingMinutes: number; href: string }
+interface PostDto extends PostCardDto { bodyHtml: string; tags: { slug: string; name: string }[]; prev: PostCardDto | null; next: PostCardDto | null; related: PostCardDto[]; updatedAt: ISODate; seo: SeoDto }
+interface TestimonialDto { id: UUID; quote: string; personName: string; personRole: string | null; companyName: string | null; photo: MediaDto | null; rating: number | null }
+interface FaqGroupDto { id: UUID; slug: string; title: string; items: { id: UUID; question: string; answerHtml: string }[]; jsonLd: object }
+
+// ---------- contact ----------
+interface SubmitContactResponse { id: UUID | null; reference: string | null; message: string }
+
+// ---------- misc public ----------
+interface RedirectRule { source: string; target: string; type: 'MOVED_301'|'FOUND_302'|'TEMP_307'|'PERM_308'; match: 'EXACT'|'PREFIX' }
+interface SitemapEntry { loc: string; lastmod: ISODate; changefreq: 'daily'|'weekly'|'monthly'|'yearly'; priority: number; images?: string[] }
+
+// ---------- auth / admin ----------
+interface MeDto { id: UUID; email: string; name: string; role: 'ADMIN'; avatar: MediaDto | null; mustChangePassword: boolean; twoFactorEnabled: boolean; csrfToken: string }
+interface SessionDto { id: UUID; deviceLabel: string | null; ip: string | null; createdAt: ISODate; lastUsedAt: ISODate; current: boolean }
+interface MessageListItemDto { id: UUID; reference: string; name: string; email: string; phone: string | null; excerpt: string; status: 'NEW'|'READ'|'REPLIED'|'ARCHIVED'|'SPAM'; isStarred: boolean; productTitle: string | null; createdAt: ISODate }
+interface MessageDto extends Omit<MessageListItemDto,'excerpt'> { message: string; subject: string | null; sourcePath: string | null; ip: string | null; userAgent: string | null; spamScore: number; spamReasons: string[]; notificationStatus: 'PENDING'|'SENT'|'FAILED'; notes: { id: UUID; kind: 'NOTE'|'REPLY'; body: string; author: { id: UUID; name: string } | null; createdAt: ISODate }[]; readAt: ISODate | null; repliedAt: ISODate | null }
+
+// ---------- admin base shapes ----------
+interface AdminBase { id: UUID; status?: ContentStatus; publishedAt?: ISODate | null; scheduledAt?: ISODate | null; sortOrder?: number; version: number; createdAt: ISODate; updatedAt: ISODate; deletedAt: ISODate | null; warnings: { code: string; message: string; field?: string }[] }
+interface RevisionDto { id: UUID; versionNo: number; changeNote: string | null; author: { id: UUID; name: string } | null; createdAt: ISODate }
+interface AuditLogDto { id: string; action: string; entityType: string | null; entityId: string | null; summary: string; diff: Record<string, [unknown, unknown]> | null; actorEmail: string | null; ip: string | null; createdAt: ISODate }
+```
+Admin entity DTOs (`ProductAdminDto`, `BrandAdminDto`, ...) = `AdminBase` + all editable fields from 3.x tables with media fields expanded as `MediaDto` objects in responses and accepted as `<field>MediaId: UUID | null` in inputs, + `seo: SeoMetaInput & { id }`. Inputs are the `Create<X>Input`/`Update<X>Input` shapes listed in 6.3; every `Update` is `Partial` of `Create` plus `expectedVersion?: number`.
+
+## 10.6 Contract rules for the frontend
+
+1. Frontend consumes absolute media URLs and never builds media URLs itself.
+2. Every public list is already filtered to published content; the frontend never filters by status.
+3. All user-visible strings that are not content come from `SiteDto.uiStrings` (key catalogue 6.5).
+4. Navigation, footer, contact info, social links, header CTA, credit line come ONLY from `GET /public/site`.
+5. Internal links in DTOs are provided as `href` path strings (e.g. `/products/montabert`); the frontend must not derive paths from slugs with its own templates (single source: `ROUTES` in `packages/contracts`).
+6. On 404 with `redirect` body or via `/public/redirects`, the frontend redirects; the middleware fetches `/public/redirects` (tag `redirects`) and caches it.
+7. The frontend revalidation route verifies the HMAC signature as specified in 6.1.7 and calls `revalidateTag` for each tag.
+8. Admin UI obtains block editor schemas from `GET /admin/block-types`, never hard-codes block fields.
+9. Admin UI reads `csrfToken` from `/auth/me` (or cookie `bt_csrf`) and sends `X-CSRF-Token` on every non-GET request; implements single-flight refresh on 401 `TOKEN_EXPIRED` (call `/auth/refresh` once, retry the original request once).
+10. Footer credit must be rendered as `"{prefix} {name}"` (default "Developed by Dagim Meseret") and copyright as provided.
+
+## 10.7 Open questions for the product owner (do not block implementation; defaults in brackets)
+
+1. Which admin emails should exist at launch, and which recipient(s) get contact notifications? [one admin from CLI; recipient from `CONTACT_NOTIFY_TO`]
+2. Real social profile URLs? [hidden until supplied]
+3. CEO name and portrait? [empty until supplied]
+4. Is a Florida address available for the Baraton Trade LLC office? [hidden placeholder]
+5. Should brochures be offered as public downloads? [yes, PUBLIC visibility default]
+6. Captcha provider choice (Turnstile recommended)? [NONE until keys supplied; honeypot + rate limit active]
+7. Should the "Products" dropdown show all products or categories? [products, max 12, switchable to categories via `DYNAMIC_PRODUCTS` config]
+8. Domain names for production and for staging (noindex)? [env-driven]
