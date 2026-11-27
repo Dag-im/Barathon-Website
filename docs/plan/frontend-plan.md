@@ -363,3 +363,312 @@ Generic `/[slug]` must never shadow routes. API rejects, and the frontend `lib/c
 - Exit: `/api/preview/exit` disables draft mode and redirects back.
 
 ---
+## 5. FULL SEO PLAN
+
+### 5.1 URL and slug structure
+- All public URLs lowercase, hyphenated, no trailing slash, no file extensions, no IDs. Canonical host is the apex or `www` chosen once (`NEXT_PUBLIC_SITE_URL`); the other host 301s at the reverse proxy; HTTP -> HTTPS 301.
+- Slugs: generated from title on create (`slugify`, ASCII, max 80 chars), editable in admin, unique per entity type (API enforces; UI checks via `GET /admin/slug-check?type=&slug=&excludeId=`). Changing a slug of a published entity auto-creates a 301 redirect (API does it; UI shows a notice "A redirect from the old URL will be created").
+- Structure:
+
+| Entity | URL pattern | Example |
+|---|---|---|
+| Home | `/` | |
+| About | `/about` | |
+| Products list | `/products` | |
+| Product category | `/products/category/{categorySlug}` | `/products/category/rock-drills` |
+| Product | `/products/{slug}` | `/products/furukawa-rock-drills` |
+| Brands list | `/brands` | |
+| Brand | `/brands/{slug}` | `/brands/montabert` |
+| Services list | `/services` | |
+| Service | `/services/{slug}` | `/services/parts-and-accessories` |
+| News list | `/news` | |
+| Post | `/news/{slug}` | |
+| Tag | `/news/tag/{slug}` | |
+| FAQ | `/faq` | |
+| Contact | `/contact` | |
+| Generic page | `/{slug}` | `/privacy-policy`, `/terms` |
+| Search | `/search?q=` | noindex |
+
+### 5.2 Metadata API usage
+- Root `app/layout.tsx` exports `generateMetadata()` reading settings: `metadataBase = new URL(NEXT_PUBLIC_SITE_URL)`, `title: { default: settings.seo.defaultTitle, template: settings.seo.titleTemplate }` (seed template `%s | Baraton Group Co.`), default description, `applicationName`, `authors`, `creator`, `publisher`, `formatDetection: { telephone: true }`, `alternates.canonical` per page, `verification` (google, bing, yandex from settings), `icons` (from favicon set), `manifest`, `themeColor` (from settings `themeColor`; light/dark entries), `openGraph` defaults (`siteName`, `locale`, `type: website`), `twitter: { card: 'summary_large_image', site: settings.twitterHandle }`, `robots` default derived from env + settings.
+- Every page exports `generateMetadata` that calls `buildMetadata({ entity, path, fallbackTitle, fallbackDescription, image, type })` in `lib/seo/metadata.ts`. Resolution order for each field: **entity.seo override (CMS)** -> entity-derived default (title / shortDescription truncated) -> site default.
+- `entity.seo` shape (every CMS entity has it): `{ metaTitle?, metaDescription?, canonicalUrl?, noindex: boolean, nofollow: boolean, ogTitle?, ogDescription?, ogImage?: Media, twitterImage?: Media, structuredDataOverride?: object|null, focusKeyword? }`.
+- Title rules: <= 60 chars rendered (warn in admin beyond 60, hard cap 70); description 120-160 chars (warn outside range). Template applied once (no double suffix on home: home uses `title.absolute`).
+- Canonical: always absolute; self-referencing; paginated/filter pages see 5.8; `canonicalUrl` override only if absolute same-host or explicit external allowed (admin warns).
+- Robots meta: indexable pages `index, follow, max-image-preview:large, max-snippet:-1`; noindex pages: admin, search, thank-you, filtered product lists, preview mode, 404, any entity with `seo.noindex`.
+
+### 5.3 Dynamic Open Graph images
+- Default `app/opengraph-image.tsx` (1200x630, `ImageResponse`, runtime `nodejs`): logo, site name, tagline from settings.
+- Entity-level `opengraph-image.tsx` in `products/[slug]`, `brands/[slug]`, `services/[slug]`, `news/[slug]`: if entity has `seo.ogImage` or cover image, `generateMetadata` points `openGraph.images` directly at the MinIO-derived 1200x630 crop (`url + ?w=1200&h=630` is NOT supported by MinIO; so we use the Next route) otherwise the `ImageResponse` composes: entity title (max 2 lines), country/category badge, brand logo, cover image darkened as background, site logo. Fonts loaded via `fetch` of local TTF in `public/fonts`. Cached by Next; revalidated with the entity tag.
+- Twitter image = OG image. `alt` text set.
+- Admin shows the OG preview card in the SEO panel (8.12).
+
+### 5.4 JSON-LD structured data
+Rendered by `components/seo/JsonLd.tsx` (server component: `<script type="application/ld+json">` with `JSON.stringify` and `<` escaped to `<`). Builders in `lib/seo/jsonld.ts` return plain objects; multiple nodes combined with `@graph` and stable `@id`s (`{origin}/#organization`, `{origin}/#website`, `{pageUrl}#webpage`).
+
+| Page | Schemas |
+|---|---|
+| Site-wide (root layout) | `Organization` (name, legalName, url, logo (ImageObject), sameAs[socials], contactPoint[{telephone, contactType: "sales", areaServed, availableLanguage}], foundingDate 2007, address PostalAddress, subOrganization [Baraton Trade PLC, Baraton Trade LLC]), `WebSite` with `potentialAction: SearchAction` (`target: {origin}/search?q={search_term_string}`, `query-input: required name=search_term_string`) |
+| Home | `WebPage` (+ site-wide graph), `LocalBusiness` (type `Corporation`/`LocalBusiness` with `geo`, `openingHoursSpecification`, `address`, `telephone`, `email`, `hasMap`, `image`, `priceRange` omitted) built from settings offices - one per office flagged `isLocalBusiness` (Addis Ababa; Florida) |
+| About | `AboutPage` + `Organization` details (founding, mission as `description`) + `BreadcrumbList` |
+| Products list | `CollectionPage` + `ItemList` (first page items with `url`, `position`, `name`, `image`) + `BreadcrumbList` |
+| Product detail | `Product` (`name`, `description`, `image[]`, `sku` (if set), `brand: {Brand}`, `manufacturer`, `countryOfOrigin`/`areaServed`, `category`, `additionalProperty[]` from specs as `PropertyValue`, `isRelatedTo` optional, `offers`: omitted unless admin enables "Show availability": then `Offer` with `availability: https://schema.org/InStock`, `priceCurrency` - price is not shown; we never emit a fake price) + `BreadcrumbList` + `FAQPage` if product FAQs present + `VideoObject` if video |
+| Brand detail | `Brand`/`Organization` (name, logo, url, `sameAs` website link) + `VideoObject` + `BreadcrumbList` |
+| Services list/detail | `Service` (`name`, `description`, `provider -> #organization`, `areaServed` Ethiopia, `serviceType`, `hasOfferCatalog` from `features`) + `BreadcrumbList` |
+| FAQ / any page with FAQ block | `FAQPage` (mainEntity Question/Answer, plain text answers) |
+| News post | `Article`/`NewsArticle` (`headline`, `datePublished`, `dateModified`, `author` Person/Organization, `image[]`, `publisher`, `mainEntityOfPage`) + `BreadcrumbList` |
+| News list | `CollectionPage`/`Blog` + `BreadcrumbList` |
+| Contact | `ContactPage` + `Organization.contactPoint` + `LocalBusiness` per office + `BreadcrumbList` |
+| Generic page | `WebPage` + `BreadcrumbList` |
+| Search | none |
+
+Rules: only emit data that is visible on the page; omit empty properties; validate with Rich Results Test in the QA checklist; `structuredDataOverride` (JSON) in the SEO panel replaces the page's primary node when set (admin validates it parses as JSON with `@type`).
+
+### 5.5 sitemap.xml
+- `app/sitemap.ts` using `generateSitemaps()` -> sitemap index when > 5000 URLs (unlikely; still implement chunks of 5000 for correctness). Data from `GET /public/sitemap` which returns `[{ loc(path), lastmod, changefreq?, priority?, images?: [{url,title,caption}], alternates? }]` for every indexable published entity (those with `seo.noindex=false`), including static pages (home, about, contact, lists).
+- `lastmod` = entity `updatedAt` (real content change), never "now". Lists use the max `updatedAt` of children.
+- Image entries for products/brands/posts (gallery and cover). Video entries are not added in v1.
+- Excluded: admin, search, thank-you, filtered URLs, noindex entities, redirected URLs, drafts.
+- `Sitemap:` line is in robots.txt. Tag `sitemap` revalidated on any publish/unpublish/delete/slug change.
+- Admin can toggle "Include in sitemap" per entity (maps to noindex or a separate `sitemapExclude` flag) and set per-type default changefreq/priority in SEO > Robots & Sitemap.
+
+### 5.6 robots.txt (CMS-controlled)
+- `app/robots.ts` reads `GET /public/robots` -> `{ rules: [{userAgent, allow[], disallow[]}], extraText?: string }`. Always appended automatically and non-removable: `Disallow: /admin`, `Disallow: /api/`, `Disallow: /search`, `Sitemap: {origin}/sitemap.xml`, `Host` omitted.
+- If `NEXT_PUBLIC_ENABLE_INDEXING=false` -> `User-agent: * Disallow: /` regardless of CMS.
+- Admin UI (8.12) has a textarea editor with live validation and a "Reset to default" button; blocks saving rules that disallow `/` in production without a confirmation dialog.
+
+### 5.7 hreflang readiness
+- v1 single language: emit `alternates.languages = { 'en': canonical, 'x-default': canonical }` only when `settings.locales.length > 1`; otherwise omit. `lib/seo/urls.ts` has `localizedPath(path, locale)` already used everywhere so introducing `/{locale}` is a mechanical change. Sitemap builder supports `alternates.languages` in entries.
+
+### 5.8 Pagination, filters, faceted URLs
+- `/products?page=2`: indexable, canonical self (with `page` param), `rel=prev/next` not needed; title appends " - Page 2". Page 1 canonical is `/products` (strip `page=1`).
+- Filters (`q`, `country`, `category`, `sort`): `robots noindex,follow`, canonical to the base `/products` (or the category page). Category landing pages are the indexable facet (`/products/category/{slug}`); country facet is not indexable in v1.
+- `/news?page=N` same rules. Tag pages indexable.
+- All pagination uses real `<a href>` links (`Pagination` renders anchors), not buttons.
+
+### 5.9 Semantic HTML and heading hierarchy rules
+1. Exactly one `<h1>` per page: the page's title (hero headline on home - rendered from the first hero slide's headline OR a visually-hidden `h1` with site tagline when the hero is a carousel of products; carousel slide titles are `h2`/`p`, never `h1`).
+2. Sections use `<section aria-labelledby>` with an `h2`; card titles are `h3`; no skipped levels. Markdown content headings are shifted: `#`->`h2`, `##`->`h3`, `###`->`h4`, capped at `h6`.
+3. Landmarks: `<header>`, `<nav aria-label="Primary">`, `<main id="main">`, `<aside>` for related, `<footer>`, footer nav `aria-label="Footer"`, breadcrumb `<nav aria-label="Breadcrumb">` with `<ol>`.
+4. Lists for repeated items (`<ul>` of cards), `<article>` for cards/posts, `<figure>/<figcaption>` for gallery images, `<address>` for contact blocks, `<time datetime>` for dates, `<dl>` for spec tables where appropriate (or `<table>` with `<th scope>`).
+5. Links have descriptive text ("Read more about Montabert", via `aria-label` or visually hidden suffix) - never bare "Read More" without context for screen readers/SEO.
+6. Images: meaningful `alt` from CMS (required for non-decorative images; admin blocks publish without alt unless marked decorative -> `alt=""`).
+7. Buttons are `<button>`, links are `<a>`; phone numbers `tel:` links (digits with `+`), email `mailto:`.
+
+### 5.10 Internal linking
+- Product detail: breadcrumb, brand link (manufacturer), category link, related products (same category/brand, 4), CTA to `/contact?product=slug`, link to relevant services.
+- Brand detail: list of its products, link back to `/brands`, related services.
+- Service detail: related products/brands (CMS relation fields), contact CTA.
+- News: related posts (same tag), links to products mentioned (`relatedProducts` relation field).
+- Footer: Quick Links + first 5 featured products + all legal pages; header mega-menu links to every category and brand.
+- Markdown renderer: internal links stay relative/same-tab; auto-linking of first mention of product names is NOT automated in v1.
+- Breadcrumb visible on all pages except home; matches BreadcrumbList JSON-LD exactly.
+
+### 5.11 Legacy URL 301 map
+The migration importer (API side) stores legacy ids; the frontend redirect resolver handles these patterns in `lib/redirects/legacy.ts` (static rules compiled into `next.config.ts redirects()`), with id->slug lookups by `GET /public/redirects/resolve?path=`:
+
+| Old URL | New URL |
+|---|---|
+| `/product/:id` | `/products/{slug}` |
+| `/products/:id` (if numeric/ObjectId) | `/products/{slug}` |
+| `/comapny/:id`, `/company/:id`, `/companies/:id` | `/brands/{slug}` |
+| `/service` | `/services` |
+| `/services/:id` (ObjectId) | `/services/{slug}` |
+| `/about-us`, `/aboutus` | `/about` |
+| `/contact-us`, `/contactus` | `/contact` |
+| `/home`, `/index` | `/` |
+| `/admin-login`, old admin paths (`/admin/products/edit/:id`...) | `/admin/login` or the nearest new admin screen (301 not needed; best effort) |
+
+All are 301 (permanent). Redirect chains max 1 hop (admin redirect manager flags chains). Old Cloudinary image URLs are not redirected (images re-hosted).
+
+### 5.12 Core Web Vitals budget (p75, mobile, 4G, mid-tier device)
+
+| Metric | Target | Hard limit |
+|---|---|---|
+| LCP | <= 2.0 s | 2.5 s |
+| CLS | <= 0.02 | 0.1 |
+| INP | <= 150 ms | 200 ms |
+| TTFB (cached HTML) | <= 200 ms | 600 ms |
+| JS shipped, home route (gzip) | <= 130 kB | 170 kB |
+| JS shipped, other public routes | <= 110 kB | 150 kB |
+| Total page weight home (first load) | <= 900 kB | 1.5 MB |
+
+Enforcement: Lighthouse CI assertions in CI (perf >= 0.9 mobile on home, product detail, products list, contact), `@next/bundle-analyzer` check, size-limit budget script.
+
+Rules to hit budgets:
+- Hero LCP image: `priority`, correct `sizes`, AVIF/WebP, explicit dimensions, no carousel JS before first paint (first slide server-rendered; Embla hydrates later; autoplay starts after `requestIdleCallback`).
+- Below-the-fold sections lazy: `next/dynamic` for `Lightbox`, `VideoFacade`, `TestimonialsCarousel`, charts, Tiptap (admin only).
+- YouTube: **facade pattern** (thumbnail `https://i.ytimg.com/vi/{id}/hqdefault.jpg` + play button; iframe from `youtube-nocookie.com` injected on click). No iframes on initial load.
+- Map embed: click-to-load facade as well (static preview image or neutral block + "Load map"), iframe `loading="lazy"`.
+- Third-party scripts (GTM/GA) via `next/script` strategy `afterInteractive`/`lazyOnload`, only after consent (5.13).
+- No layout shift: all media has intrinsic ratio; skeletons match final size; fonts use `size-adjust` via `next/font`; marquee has fixed height.
+- Avoid client-side data fetching on public pages. Prefetch links default; heavy lists use `prefetch={false}` for footers long lists.
+
+### 5.13 Analytics, Search Console, Tag Manager (CMS-configurable)
+Settings fields (Site Settings > "Analytics & Tags"): `ga4MeasurementId` (G-XXXXXXXXXX), `gtmContainerId` (GTM-XXXXXXX), `googleSiteVerification`, `bingSiteVerification`, `yandexVerification` (meta tags), `metaPixelId` (optional), `customHeadScripts` (NOT supported - security), `consentMode: 'off'|'banner'`, `anonymizeIp`.
+- `components/analytics/Analytics.tsx` (server) renders `next/script` tags only when IDs present, in production, and not in draft mode. If both GTM and GA4 are set, GA4 is NOT loaded directly (GTM expected to manage it; admin shows a warning).
+- Consent: `CookieConsent` banner (client) when `consentMode = banner`; default consent state denied (Consent Mode v2 `gtag('consent','default',...)` injected before GTM); accepting updates consent. Choice stored in a first-party cookie `bt_consent` (180 days).
+- Events pushed to `dataLayer` (typed helper `lib/analytics/track.ts`): `generate_lead` (contact form success), `view_item` (product detail), `select_content` (inquiry button), `file_download` (brochure), `search` (search submit), `click_phone`, `click_email`, `video_play`.
+- Verification meta tags come through Metadata API `verification`.
+
+### 5.14 Favicon, manifest, theme color
+- CMS Site Settings holds favicon source (square PNG >= 512) and optional dark favicon. The API produces derivatives: `favicon.ico` (48), `icon-32.png`, `icon-192.png`, `icon-512.png`, `apple-touch-icon.png` (180), `maskable-512.png`, plus `og-default.png`. The frontend route handlers `app/favicon.ico/route.ts`, `app/icon-[size]/route.ts`, `app/apple-icon/route.ts` proxy the MinIO URLs with long cache headers (so favicon is served from the site origin as crawlers expect), falling back to `public/` defaults seeded from `logo.png`.
+- `app/manifest.ts`: `name`, `short_name`, `description`, `start_url: '/'`, `display: 'browser'`/`standalone`, `background_color`, `theme_color` (from settings), icons incl. maskable.
+- `<meta name="theme-color">` light/dark via Metadata `themeColor` array.
+
+### 5.15 Accessibility checklist (WCAG 2.2 AA) - implementation rules
+1. Skip link ("Skip to main content") first focusable element; `main` has `tabindex="-1"` for focus after route change.
+2. Visible focus indicator on every interactive element (>= 3:1 contrast, >= 2 px) (2.4.7, 2.4.11 focus not obscured: sticky header must not cover focused elements -> `scroll-padding-top`).
+3. Colour contrast: text 4.5:1, large text/UI 3:1 - tokens from the design spec are verified by an automated contrast test in CI.
+4. Target size >= 24x24 CSS px (2.5.8), buttons/touch targets 44 px on mobile by convention.
+5. Keyboard: mega menu opens on Enter/Space/ArrowDown, Esc closes and returns focus; carousel has prev/next buttons, pause/play control (2.2.2), slides `role="group" aria-roledescription="slide" aria-label="n of N"`; marquee pausable (button + hover/focus) and disabled under `prefers-reduced-motion`.
+6. Forms: every input has a visible `<label>`; errors associated by `aria-describedby`, announced via `aria-live="polite"`; error summary focus on submit failure; required fields marked with text not only colour; autocomplete attributes (`name`, `email`, `tel`, `organization`) (1.3.5); no CAPTCHA that is cognitive test - Turnstile managed/invisible mode; honeypot hidden with `aria-hidden` and `tabindex=-1`.
+7. Redundant entry (3.3.7): inquiry from product pre-fills; admin forms keep values after validation errors.
+8. Accessible authentication (3.3.8): login form allows paste, password managers (`autocomplete="current-password"`), no puzzle. 2FA OTP allows paste.
+9. Images alt; decorative `alt=""`; icons `aria-hidden`; icon-only buttons have `aria-label`.
+10. Language: `<html lang>`; foreign names marked if needed.
+11. Reduced motion & `prefers-contrast` respected; no content only on hover.
+12. Dialogs/sheets trap focus (Radix), labelled, restore focus. Toasts use `role=status` (sonner) and are persistent enough (>= 5 s, with close button).
+13. Tables: `<caption>`/`aria-label`, header cells scoped; admin tables keyboard-sortable, row actions reachable.
+14. Zoom/reflow: usable at 200% and 320 px width, no horizontal scroll (1.4.10), text spacing override safe.
+15. Dragging alternatives (2.5.7): every drag-and-drop list (nav, sections, gallery) also offers "Move up/Move down" buttons and keyboard reordering via dnd-kit keyboard sensor.
+16. Videos: facade buttons labelled "Play video: {title}"; YouTube iframes titled.
+17. Page titles unique and descriptive; focus moves to `h1` on client navigation in admin.
+18. Automated: `@axe-core/playwright` on every template in e2e; manual screen reader pass (NVDA + VoiceOver) before launch.
+
+### 5.16 noindex for admin and non-public surfaces
+`(admin)/admin/layout.tsx` exports `metadata.robots = { index:false, follow:false, nocache:true }`; middleware adds `X-Robots-Tag`; robots.txt disallows `/admin`; admin pages are excluded from sitemap; auth pages too. Preview-mode pages noindex.
+
+### 5.17 Pre-launch SEO checklist (also mirrored in section 12)
+Canonical host redirect; HTTPS/HSTS; one h1 per page; unique titles/descriptions on all indexable URLs; JSON-LD validates; sitemap submitted in GSC; robots.txt reviewed; 301 map tested for every legacy URL; no `noindex` leaking to production; analytics firing with consent; OG/Twitter previews validated; images have alt; CWV within budget on real device; 404 status codes correct (soft-404 free); hreflang absent (single language) without errors; breadcrumbs match JSON-LD; GSC + Bing verified; Lighthouse SEO 100.
+
+---
+
+## 6. PUBLIC SITE - page-by-page specification
+
+Conventions for this section:
+- "Fields" refer to the CMS/API field names (camelCase) in the public API responses (section 11.2).
+- Breakpoints (used generically; exact values in design doc): mobile < 640, tablet 640-1023, desktop >= 1024, wide >= 1440.
+- Every page: `SiteHeader`, `Breadcrumbs` (except home), `<main>`, `SiteFooter`.
+- Every list: loading skeleton, empty state (copy from messages), error state (retry).
+- Metadata column: title pattern / description source / OG / JSON-LD.
+
+### 6.1 Home `/`
+
+Rendered from `GET /public/home` => `{ seo, sections: Section[] }` using the block registry (7.4). Default seeded order and content:
+
+| # | Section type | Content fields consumed | Notes |
+|---|---|---|---|
+| 1 | `hero` | `slides[]: { id, kind: 'product'|'custom', productRef?, headline, subheadline, image: Media, ctaPrimary:{label,href}, ctaSecondary?, badge? (country) }`, `autoplayMs` (default 6000), `showThumbnails` boolean | Slides can be auto-filled from featured products (`source: 'featuredProducts'`, `limit: 8`) or custom. Shows counter "1/8" and thumbnail strip like the live site. First slide SSR + `priority`. Hidden `h1` fallback if slides use `h2`. |
+| 2 | `brandsMarquee` | `heading` ("Brands We Work With"), `subheading` ("Trusted by industry leaders worldwide"), `source: 'brands'` (all published brands with logo, ordered by `sortOrder`) or manual `brands[]`, `speed`, `linkToBrand` boolean | Logos link to `/brands/{slug}`. Duplicate track for the infinite loop; `aria-hidden` on duplicate. |
+| 3 | `companyStory` | `logo: Media`, `paragraphs: string[]` (4 live paragraphs), `ctaPrimary` ("Learn more" -> `/about`), `ctaSecondary` ("Our Products" -> `/products`), `milestones?: {year,text}[]` | Dark/contrasting block per design. |
+| 4 | `stats` (new, optional, default enabled) | `items: {value:number, suffix?, label}[]` e.g. 2007 founded, 9 brands, 8 products lines, 2 countries | Count-up when visible, static under reduced motion. |
+| 5 | `featuredProducts` | `heading`, `source: 'featured'|'manual'|'latest'`, `limit`, `productRefs[]`, `viewAllHref` | grid of `ProductCard` |
+| 6 | `services` | `heading` ("Our Services"), `source: 'all'|'manual'`, `serviceRefs[]` | cards with icon/image, feature bullets (first 3) and link |
+| 7 | `videos` | `heading` ("Featured Videos"), `subheading` ("Discover our work through these immersive experiences"), `videoRefs[]` or `source:'featured'`, `limit: 6` | 3x2 grid, facade embeds |
+| 8 | `testimonials` | `heading`, `items` from relations | hidden when empty |
+| 9 | `news` | `heading`, `limit: 3` | hidden when empty |
+| 10 | `ctaBanner` | `heading`, `text`, `ctaPrimary` ("Let's Talk" -> `/contact`), `phone` shown | |
+
+Responsive: hero full-bleed; mobile hides thumbnails strip (dots only), 1-col grids, marquee reduced height; tablet 2 cols; desktop 3 cols (videos 3x2).
+Interactions: hero prev/next/pause, thumbnail click, swipe; marquee pause on hover/focus; videos click-to-play; product card share.
+States: sections whose data resolved empty are skipped (never render empty heading); if the whole API call fails with no cache -> error boundary.
+SEO: title `absolute` = settings.seo.homeTitle (seed "Baraton Group Co. | Rock Drilling, Air Compressors & Construction Machinery in Ethiopia"); description from home `seo`; JSON-LD per 5.4; LCP = first hero image.
+
+### 6.2 About `/about`
+Sections (from `GET /public/about`): 
+1. `pageHeader`: `title` ("About Us"), `intro`, `heroImage`.
+2. `companyStory`: long text blocks (markdown) from About content (2007 origins, growth, 2019 USA + woodworking factory), `timeline[]: {year, title, description}` (seed: 2007, 2019, + brand additions).
+3. `ceoMessage`: `title` ("CEO's Message"), `bodyMarkdown` (two paragraphs from ui-strings), `name`, `role`, `photo`.
+4. `missionVision`: `missionItems: string[]` (4 bullets), `visionText`, optionally `valuesItems`/"Philosophy".
+5. `subsidiaries`: two cards: Baraton Trade PLC (Ethiopia) and Baraton Trade LLC (USA) each with `name, country, description, highlights[]` (LLC: Technological Solutions, Real Estate Development & Portfolio Management, Stock & Share Portfolio Management, Global Product Distribution; exclusive rights lists Furukawa and Airman; PLC: genuine parts, technical support, self-repair resources). Anchors `#baraton-trade-plc`, `#baraton-trade-llc`.
+6. `capabilities`: "Construction machinery, Rock drilling tools, Hydraulic attachments, Equipment servicing & support".
+7. `brandsMarquee` (reuse), 8. `stats` (reuse), 9. `ctaBanner`.
+Tabs: the live site uses tabs/anchors for CEO Message / Philosophy / Baraton Trade LLC / Baraton Trade PLC; implement as an in-page sticky sub-nav (anchor links, `IntersectionObserver` highlight) rather than JS tabs so all content is crawlable.
+Responsive: sub-nav becomes horizontally scrollable chips on mobile.
+SEO: title "About Us"; JSON-LD `AboutPage`, Organization with `foundingDate`, `subOrganization`.
+
+### 6.3 Products list `/products`
+- Page header: title "Products", intro text (CMS `productsIntro`).
+- Toolbar (sticky below header on desktop): search input (debounced 300 ms, submit updates `?q=`), filters: Country (select/checkbox from `GET /public/products/facets` -> `{countries:[{value,label,count}], categories:[{slug,name,count}], brands:[...]}`), Category, Brand; Sort (`featured` default, `name-asc`, `newest`); result count live region; "Clear filters". Mobile: filters in a `sheet`/`drawer` opened by a "Filters" button with active-count badge.
+- Grid: `ProductCard` (image 4:3, country badge, share button, title, shortDescription clamp 3 lines, "Read More" link -> `/products/{slug}`, optional "Request quote" secondary). 1 col mobile, 2 tablet, 3 desktop (4 wide).
+- Pagination: server-driven, 12 per page, anchors `?page=N` (preserve other params).
+- Filter state lives in the URL (server component reads `searchParams`; filters are `<form method="get">` progressive enhancement + client enhancement for instant UX with `useRouter().replace` + `startTransition`).
+- Empty: "No products found" + clear filters button + contact CTA. Loading: 6 skeleton cards (`loading.tsx` + Suspense around grid). Error: retry.
+- SEO: title "Products" (+ " - Page N"); canonical per 5.8; JSON-LD CollectionPage/ItemList/Breadcrumb; filtered => noindex.
+- Category sub-route `/products/category/[categorySlug]`: same grid pre-filtered, has its own `h1`, intro text (`category.description` markdown), `seo` fields, indexable.
+
+### 6.4 Product detail `/products/[slug]`
+Fields from `GET /public/products/{slug}`: `id, slug, title, shortDescription, country, brand:{slug,name,logo}, category:{slug,name}, coverImage, gallery: Media[], contentMarkdown, specs: {group?, label, value, unit?}[], features: string[], brochures: {title, file:{url,size,mimeType}}[], videoUrl?, faq?: {q,a}[], relatedProducts: ProductCard[], relatedServices?, sku?, updatedAt, seo`.
+Sections in order:
+1. Breadcrumb: Home > Products > (Category) > Title.
+2. Top block: left `ProductGallery` (main image + thumbs; click opens `Lightbox` with keyboard arrows/Esc; swipe on mobile; first image `priority`); right: country badge, `h1` title, brand link, shortDescription, key features bullets (max 5), CTA row: primary "Request a quote" (-> `/contact?product={slug}&subject=quote`), secondary "Download brochure" (one button or dropdown if multiple; tracked `file_download`), tertiary share button (Web Share API fallback to copy-link dropdown: copy link, WhatsApp, LinkedIn, X, Facebook, Email).
+3. `Tabs` (or stacked anchors on mobile? decision: tabs on desktop, accordion on mobile, but ALL content present in DOM for crawlers): "Overview" (rendered markdown), "Specifications" (`SpecTable`, grouped), "Downloads" (brochures list with size and type), "Video" (facade if `videoUrl`). Tabs absent when empty.
+4. Inquiry strip: "Interested in {title}?" + phone + button; includes WhatsApp click-to-chat if settings.whatsappNumber.
+5. FAQ accordion (if present).
+6. Related products carousel/grid (4) + "Related services".
+States: 404 -> `notFound()`; missing gallery -> placeholder; missing brochure -> button hidden.
+SEO: title `{metaTitle || title}`; description `metaDescription || shortDescription`; OG image = cover or generated; JSON-LD Product + Breadcrumb (+FAQ, +VideoObject).
+The legacy markdown (with `# ` headings and stray `#### #####` tokens) is cleaned by the importer; the renderer shifts headings and strips empty headings.
+
+### 6.5 Brands / Partners `/brands`
+- Header: title "Brands We Work With" (CMS `brandsIntro`), intro.
+- Filter chips by country (from facets), optional search; grid `BrandCard` (logo on neutral tile, name, country badge, short description clamp 3, "View brand").
+- Special badge: "Official agent" for brands flagged `isExclusiveAgent` (Furukawa, Airman).
+- Empty/loading/error as above. SEO: CollectionPage + ItemList.
+
+### 6.6 Brand detail `/brands/[slug]`
+Fields: `name, slug, logo, country, shortDescription, descriptionMarkdown, videoUrl (normalised youtube id), website?, isExclusiveAgent, products[] (relation), services[] (relation), gallery?, seo`.
+Sections: breadcrumb; `BrandHero` (logo, `h1` name, country, official-agent badge, short description, CTA "Contact us about {name}", external website link `rel=noopener`); description (markdown); video (facade, 16:9, only if valid id - invalid values such as `a` are rejected by the admin and importer); "Products from {name}" grid (from relation, hidden if empty); related services; other brands carousel; CTA.
+SEO: title `{name}`; JSON-LD Brand/Organization + VideoObject + Breadcrumb.
+
+### 6.7 Services `/services` and `/services/[slug]`
+List: header (title "Our Services", intro), cards (`ServiceCard`: image or icon, title, shortDescription, first 3 `features`, "Learn more"). Seed: Parts and Accessories; Maintenance and Service. 1/2 cols.
+Detail fields: `title, slug, shortDescription, icon?, image, features: string[], descriptionMarkdown?, process?: {step,title,text}[], relatedBrands[], relatedProducts[], faq?, seo`.
+Sections: breadcrumb; hero (h1, image, shortDescription, CTA "Request this service" -> `/contact?service={slug}&subject=service`); "What is included" checklist from `features`; description; process steps; related brands/products; FAQ; CTA banner.
+SEO: JSON-LD Service + Breadcrumb (+FAQ).
+
+### 6.8 Contact `/contact`
+Fields from `GET /public/contact` + settings: `title, intro, offices[]: {id, name, country, addressLines[], phones[], email, hours?, mapEmbed:{lat,lng,zoom,placeQuery?}, isPrimary}`, `socials[]`, `formSettings: {subjects[], captchaProvider, successMessage, consentText}`.
+Layout: header ("Contact Information: Fill out the form or contact us through these channels"); two columns desktop (form left, info right), stacked mobile with info first? Decision: form first on mobile, info below.
+Info panel: per office `<address>` with Address, Phone (each `tel:`), Email (`mailto:`), hours, "Follow Us" socials, "Get directions" link (`https://www.google.com/maps/search/?api=1&query=`). Offices: Addis Ababa (Baraton Trade PLC) and Florida USA (Baraton Trade LLC; address seeded blank, admin fills; hidden if no address).
+Form (`ContactForm`, RHF + zod, Server Action `submitContact` -> `POST /public/contact-messages`):
+| Field | Rules |
+|---|---|
+| `name` | required, 2-100 chars, trimmed |
+| `email` | required, valid email, <= 254 |
+| `phone` | optional, E.164-tolerant regex `^[+0-9()\-\s]{7,20}$` |
+| `company` | optional, <= 120 |
+| `subject` | select from `subjects` (General, Product quote, Service request, Parts, Partnership); prefilled from `?subject=` |
+| `productSlug` | hidden/readonly chip "Inquiry about: {product title}" prefilled from `?product=`; removable |
+| `message` | required, 10-3000 chars, counter |
+| `consent` | checkbox required: "I agree to the processing of my data" with link to /privacy-policy (if page exists) |
+| `website` (honeypot) | must be empty; hidden |
+| `captchaToken` | required when provider != none |
+| `startedAt` | hidden timestamp; submissions < 3 s rejected by API |
+Behaviour: submit -> pending state (button spinner, fields disabled) -> success: inline success panel + toast + `dataLayer generate_lead` + optional redirect to `/thank-you` (setting); errors: field errors mapped from 422 `errors[]`, 429 "Too many attempts, try later", network error with retained values. Native no-JS fallback works through Server Action form post.
+Map: `MapEmbed` facade (static neutral card with address + "Load map" button) injecting Google Maps embed iframe (`https://www.google.com/maps/embed/v1/place?...` or no-key `maps.google.com/maps?q=..&output=embed`) with `loading="lazy"` and `title`. One map tab per office when > 1.
+SEO: title "Contact Us"; JSON-LD ContactPage + LocalBusiness + Breadcrumb.
+
+### 6.9 News / Blog `/news` and `/news/[slug]`
+List: header, tag filter chips, featured post (first) + grid `PostCard` (cover, tag badges, title, excerpt, date `<time>`, reading time), pagination 9 per page. Empty: "No news yet." Hidden from nav/footer when no published posts (setting `news.enabled` auto-computed).
+Detail fields: `title, slug, excerpt, coverImage, bodyMarkdown, tags[], author:{name,avatar?}, publishedAt, updatedAt, readingTime, relatedProducts[], seo`.
+Sections: breadcrumb; header (tags, h1, meta: author/date/reading time, share); cover; article body with auto-generated table of contents when >= 3 `h2` (sticky on desktop); related products; related posts (3); CTA.
+SEO: Article JSON-LD; OG type `article` with `publishedTime`, `modifiedTime`, `authors`, `tags`.
+
+### 6.10 FAQ `/faq`
+Fields: `title, intro, groups[]: {title, items:[{id,question,answerMarkdown}]}`. Accordion per group (type multiple, first open optional), anchor links per question (`#q-{id}`), client-side filter input (progressive, hidden if JS off). FAQPage JSON-LD for all items (<= 100). CTA at bottom.
+
+### 6.11 Generic CMS page `/[slug]`
+Fields: `title, slug, template: 'default'|'legal'|'landing', bodyMarkdown | sections[] (same block registry as home), updatedAt, seo`. `legal` template: narrow prose column, "Last updated {date}", auto table of contents. Seeds: `privacy-policy`, `terms`. 404 if slug not found or draft.
+
+### 6.12 Search results `/search?q=`
+Server-rendered from `GET /public/search?q=&type=&page=` => grouped results `{products[], brands[], services[], posts[], pages[]}` with counts. UI: search input (autofocus when empty), result tabs/filter chips (All, Products, Brands, Services, News), result list with highlighted snippet, pagination. Empty: "No results for '{q}'" + suggestions (popular products, contact CTA). `noindex,follow`. Min query 2 chars. Header search (Command palette, 7.2) hits `GET /public/search/suggest?q=` (client, debounced, 5 results per group) and "See all results" navigates here.
+
+### 6.13 404 Not found
+Branded page, `h1` "Page not found", search box, links to Home/Products/Brands/Contact, top 4 featured products. HTTP 404. noindex. Logs the path to API `POST /public/not-found-log` (fire-and-forget, sampled) so admin can see 404 hits in SEO > Redirects ("Suggested redirects").
+
+### 6.14 Thank you `/thank-you`
+Static confirmation (used only if setting enabled), noindex, link back home and to products.
+
+---
