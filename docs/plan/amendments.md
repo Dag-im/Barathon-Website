@@ -23,3 +23,12 @@ Approved by the project owner after reviewing the plans.
 
 ## A5. Git rules
 - Never mention Claude/AI/assistant in code, comments, docs, commit messages or package metadata. Do not run git commit/push yourself; the orchestrator commits.
+
+## A6. Videos: uploaded file OR YouTube link, both played inside the website
+- A Video entity has `sourceType`: `UPLOAD` or `YOUTUBE`.
+  - `YOUTUBE`: admin pastes any YouTube URL (watch, youtu.be, shorts, embed, with extra params like `&t=35s`). The API validates and extracts the 11-char video id, stores `youtubeId` (+ optional start seconds) and derives the thumbnail (`https://i.ytimg.com/vi/<id>/hqdefault.jpg`, admin may override with an uploaded poster). Reject non-YouTube hosts (SSRF/XSS safe).
+  - `UPLOAD`: admin uploads mp4/webm (max 200 MB, configurable) to the MinIO public-media bucket via the media pipeline; store the media id, duration if known, and a poster image (uploaded or generated frame via ffmpeg if available, otherwise a placeholder). Serve with HTTP range support (Accept-Ranges) via the reverse proxy / API stream route.
+- Public playback stays on the site: YouTube plays in an in-page player using the privacy-friendly `youtube-nocookie.com/embed/<id>` iframe loaded only after click (facade, per the design); uploads play in a native `<video controls preload="metadata" poster=...>` inside the same player dialog/section. No link-outs to youtube.com as the default behaviour.
+- Applies everywhere videos appear: the home "Featured Videos" section, brand/company detail video (replaces the free-text company youtube link; seed it as a YOUTUBE video linked to the brand), product detail videos, and the News/page rich-text video block.
+- Admin Videos module: form with a source toggle (YouTube link / Upload file), live preview, title, description, poster, linked product/brand, order, published flag. Seed the six live YouTube ids found in docs/source/ui-strings.txt / the old bundle (AJSPVh_fCoY, C8uXNLChKuo, gnwQx7AC2ws, pyoNPfUgJJo, q9M_eFAnwPs, uQlNhObyLu8) plus the brand links in docs/source/company.json (skip invalid values like "a").
+- Add `VideoObject` JSON-LD and include videos in the video sitemap/sitemap entries.
