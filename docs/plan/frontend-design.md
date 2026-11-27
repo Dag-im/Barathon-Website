@@ -606,14 +606,14 @@ Header "Let's Talk": variant `dark`, size `md`, `Phone` icon trailing; keeps the
 - **Switch**: 40x24 track, off `#878F9D`, on `#2F447D`, thumb white 18px with `shadow-xs`.
 - **Phone input**: free text with `inputMode="tel"`, placeholder `+251 911 123456`.
 - Placeholders (neutral, replace "John Doe"): name `Full name`, email `name@company.com`, phone `+251 911 123456`, company `Company name`, message `Tell us which machine, part or service you need.` **(proposed)**.
-- Form layout: single column on mobile, two columns for name/email on >= 768; vertical gap between fields 20px; submit button `primary` `md` full-width on mobile, auto on desktop, right of the consent text on desktop? No: below consent, left-aligned.
+- Form layout: single column on mobile, two columns for name/email on >= 768; vertical gap between fields 20px; submit button `primary` `lg` full-width on mobile, auto width on desktop, placed below the consent checkbox and left-aligned.
 - Inline validation on blur, summary alert above the form on submit with error count and links to fields.
 
 ### 6.4 Badges and chips (shadcn `badge`)
 Shape radius 2px, height 24 (small 20), padding-x 8, font Roboto 12px/16 weight 500, uppercase tracking 0.06em, no border unless noted.
 | Variant | bg / text | Use |
 |---|---|---|
-| `country` (flag-free) | bg #FFFFFF with 1px #D1D5DB border, text #374151, leading 6px `MapPin`? No: text only. Format: country name uppercase, preceded by a 3px x 12px `#843C40` vertical tick (the burgundy punctuation); e.g. `| JAPAN` | product/brand cards (top-left over the image on a white label) |
+| `country` (flag-free) | bg #FFFFFF with 1px #D1D5DB border, text #374151, text only (no icon). Format: country name uppercase, preceded by a 3px x 12px `#843C40` vertical tick (the burgundy punctuation); e.g. `| JAPAN` | product/brand cards (top-left over the image on a white label) |
 | `agent` ("Official agent") | bg #2F447D text #FFFFFF, leading `Check 12` | brands flagged `isExclusiveAgent` |
 | `status-published` | bg #DCFCE7 text #166534, dot `#15803D` | admin |
 | `status-draft` | bg #F1F3F5 text #374151, dot `#6B7280` | |
@@ -691,13 +691,13 @@ Row: border-bottom 1px `#E5E7EB` (first row border-top 2px `#111827` for the FAQ
 **Downloads list**: row = `FileText 24` `#2F447D` + title (`h5`) + meta `caption` ("PDF, 2.4 MB, English") + `Download` outline `sm` button right.
 
 ### 6.13 Pagination (shadcn `pagination`, anchors)
-Centered? left-aligned with the result summary right ("Showing 1-12 of 38" `small`). Items 44x44, radius 4px, `small` 15px, current: bg `#2F447D` text white, others text `#374151` hover bg `#EEF1F8`; prev/next with chevrons and labels "Previous"/"Next" (labels hidden < 640). Disabled ends 0.5 opacity. Max 7 visible with ellipsis.
+Left-aligned, with the result summary on the right ("Showing 1-12 of 38" `small`). Items 44x44, radius 4px, `small` 15px, current: bg `#2F447D` text white, others text `#374151` hover bg `#EEF1F8`; prev/next with chevrons and labels "Previous"/"Next" (labels hidden < 640). Disabled ends 0.5 opacity. Max 7 visible with ellipsis.
 
 ### 6.14 Toasts (sonner)
 Position bottom-right desktop, top-center mobile. Width 360, radius 4px, bg `#FFFFFF`, 1px border `#E5E7EB`, `shadow-lg`, left 4px accent bar by type (success `#15803D`, error `#B91C1C`, warning `#B45309`, info `#0D5380`), leading 20px icon in that colour, title 15px 600 `#111827`, description 14px `#4B5563`, action button `link` variant. Close button 32px. Never auto-dismiss errors under 8s.
 
 ### 6.15 Dialogs and sheets (shadcn `dialog`, `alert-dialog`, `sheet`, `drawer`)
-Overlay `rgba(11,18,32,0.6)`. Dialog: bg `#FFFFFF`, radius 6, `shadow-lg`, max-width 520 (confirm) / 720 (forms) / 960 (media picker), padding 24, title `h4`, description `small` `#4B5563`, footer buttons right-aligned (secondary left of primary), destructive dialogs use `destructive`. Close `X` 36px top-right. Mobile: dialogs become bottom drawers (`drawer`) with 16px top radius exception? No: radius 6 only; drawer top corners 6px.
+Overlay `rgba(11,18,32,0.6)`. Dialog: bg `#FFFFFF`, radius 6, `shadow-lg`, max-width 520 (confirm) / 720 (forms) / 960 (media picker), padding 24, title `h4`, description `small` `#4B5563`, footer buttons right-aligned (secondary left of primary), destructive dialogs use `destructive`. Close `X` 36px top-right. Mobile: dialogs become bottom drawers (`drawer`) with 6px top corners (radius policy still applies).
 Lightbox: full-screen bg `#0B1220` 96%, image `contain`, counter "03 / 12" `caption` white bottom-centre, arrows 48px circular ghost buttons white 12% bg, caption below image, thumbnails none.
 
 ### 6.16 Video facade (`VideoFacade`)
@@ -728,3 +728,631 @@ See 7.14.
 - **SkipLink**: hidden until focus; then top-left fixed, bg `#111827`, text white, padding 12 20, z 100.
 
 ---
+
+## 7. Page-by-page visual descriptions
+
+Conventions: Widths = 1440 desktop / 768 tablet / 390 mobile. Section names match plan block types (`hero`, `brandsMarquee`, `companyStory`, `stats`, `featuredProducts`, `services`, `videos`, `testimonials`, `news`, `ctaBanner`, `ceoMessage`, `missionVision`, `subsidiaries`, `timeline`, `richText`, `imageText`, `cardGrid`, `faq`, `contactCta`). All pages share: SiteHeader (6.6), Breadcrumbs (6.9, not on home), `<main>`, SiteFooter (6.8). "Navy" = `.section-navy` `#111827`. Section padding sizes refer to 4.3 (`lg`/`md`/`sm`). Every section heading block = optional index numeral + eyebrow + `h2` + optional `lead`.
+
+Page header pattern (`PageHeader`) used on non-home pages: bg `#F8F9FA`; breadcrumb row above; padding 48 top / 40 bottom; left 8 cols: eyebrow (burgundy tick + section name), `h1`, `lead` (max 56ch); right 4 cols (desktop): optional fact stack or action; bottom 1px `#D1D5DB` rule. Ring field decoration right-aligned at 6% (`#DDE3F1`) allowed once.
+
+### 7.1 Home `/`
+
+**Hero concept ("The Plant Floor")** - not a stock slider. A full-bleed industrial photograph (drill rig on a quarry face / Furukawa rock drill in operation; CMS image per slide) fills a 1440 x 760 band (min-height 640, `100svh - header` capped at 820). Over it, the indigo scrim (4.7). The **persistent headline does not slide**; only the right-hand "product index" and the background image change per slide. This keeps `h1` stable and gives real hierarchy.
+Composition at 1440 (container 1200, 12-col):
+- Cols 1-7, vertically centred, left-aligned: eyebrow "Official agent of Furukawa Rock Drill and Airman in Ethiopia" (white, 13px caps, burgundy-tint tick `#D08A90`); `h1` `display` token 72/72 white, max 14ch per line: **"Rock drilling, compressed air and construction machinery for Ethiopia."** **(proposed headline, built from the real positioning: "Today, the group provides a wide array of services, including rock drilling, compressed air systems, filtration, construction machinery attachments, and real estate.")** CMS field = block `heading`; render it as the page `h1` (this overrides the plan's hidden-h1 option for visible text; slide titles render `h2`/`p`). Below: `lead` white 20/32 `#D1D5DB` max 52ch: "Importer and distributor since 2007: genuine machines, parts and field service from Furukawa, Airman, Montabert and more." **(proposed)**. CTA row (gap 12, margin-top 40): `primary`-on-navy `lg` "Explore products" (-> /products), `outline`-on-navy `lg` "Request a quote" (-> /contact?subject=quote).
+- Cols 9-12: **Product index rail**: a vertical list of the slide products, replacing the live "1/8" counter + thumbnail strip: each row 56px: index "01" (Afacad 600 16px `#9CA3AF`, active `#FFFFFF`), product title (Afacad 600 18px white, `#D1D5DB` inactive), country `caption` right-aligned; active row has 2px left bar white and a 2px progress line along its bottom edge (autoplay progress, 5.3); hover bg `rgba(255,255,255,0.06)`. Above the rail: `h2`-level `caption` "Product lines" and the counter "01 / 08" (Afacad 600 14px). Under the rail, the active product's `shortDescription` (14/22 `#D1D5DB`, 3 lines) and link "View {product}" (`link` on navy).
+- Corner crosses and 12-column grid lines (4.10) at 5% white. No other ornament.
+- **Key facts strip** (overlaps the hero bottom, anchored to the bottom edge, bg solid `#0B1220`, height 96, container-aligned): 5 facts separated by 1px `rgba(255,255,255,0.12)` verticals: "2007" / "Founded", "9" / "Partner brands", "Furukawa and Airman" / "Official agent in Ethiopia", "2019" / "USA subsidiary, Baraton Trade LLC", "Addis Ababa" / "Bole Road, Wollo Sefer". Numerals Afacad 700 28px white, labels `stat-label` `#9CA3AF`. These come from `stats` / settings; if CMS values are missing, a fact is dropped, never "0".
+Tablet 768: image band 640 high; headline `display` 56/58; index rail moves under the CTA as a horizontal row of 4 compact index chips (scrollable); facts strip 2 rows x 3 (auto height).
+Mobile 390: band `4:5` height 640; image focus top; scrim vertical (4.7); content bottom-aligned: eyebrow, `h1` 40/42, lead (hidden, replaced by 1 line "Importer and distributor since 2007"), CTA stack (full width, 52px); progress as 4px dots row (`01`..`08` collapsed to dots, active white 24px wide bar) above the CTAs; facts strip becomes a 2x2 grid below the hero on `#0B1220` (first four facts).
+Missing slide image: `ImagePlaceholder` on `#111B38` with large ring field; text remains legible.
+
+**Section 2 `brandsMarquee`** (`sm`, bg `#FFFFFF`, border-bottom hairline): heading left-aligned "Brands We Work With" `h3`-size 28/34, `small` "Trusted by industry leaders worldwide" right-aligned on desktop. Track: logos 40px high in uniform 180x80 cells with no borders, grayscale + 70% opacity, hairline vertical separators `#E5E7EB` between cells; hover: colour, 100%. Edge masks 64px. Official-agent logos (Furukawa, Airman) are first in order. Missing logo -> text name in Afacad 600 18px `#6B7280`. Mobile: cell 140x64, same behaviour. Each logo link `aria-label="{name}, {country}"`.
+
+**Section 3 `companyStory`** (navy `#111827`, `lg`): desktop 12-col. Left cols 1-5: oversized index numeral "01" hidden; eyebrow "About the group" **(proposed)**; the **colour logo on a white 4:3 plate** (live site has the logo on a white block; keep: white panel 100% col width, padding 48, logo contained) with plate offset `#1F2937`; under it a 3-item milestone list (`milestones[]`): "2007 Import and distribution begins" / "2019 Baraton Trade LLC (USA) and woodworking factory" / "Today Rock drilling, compressed air, filtration, attachments, real estate" with year in `#60A5FA` Afacad 600 and text `#D1D5DB`, separated by hairlines. Right cols 7-12: paragraphs from CMS in `body-lg` 18/30 `#D1D5DB` (first paragraph `lead`-size 20/32 `#FFFFFF`), max 60ch, 24px gaps; CTA row: `primary` "Learn more" (-> /about) and `outline` "Our Products". Ring field right edge 8%. Tablet: logo plate top, text below, 8 cols. Mobile: plate 100% (padding 32), paragraphs 17/28, CTAs stacked.
+
+**Section 4 `stats`** (`sm`, bg `#F8F9FA`): 4 stat items in one row (desktop) with vertical hairlines; each: burgundy tick, `stat` numeral 64 `#2F447D`, `stat-label`. Seed: "2007 / Founded", "9 / Partner brands", "8 / Product lines", "5 / Countries of manufacture" **(derived from product data: Japan, France, Sweden, Italy, Germany; bind to data)**. Counters per 5.3. Mobile 2x2. Reveal stagger.
+
+**Section 5 `featuredProducts`** (`lg`, bg `#F8F9FA`): header row: eyebrow "Catalogue" **(proposed)**, `h2` "Our Products", right-aligned `link` "View all products". Grid of `ProductCard` (3 columns desktop, gap 32/40; 2 tablet; 1 mobile). All cards are the same format; the grid is preceded by a **country filter row** (static chips linking to `/products?country=Japan`, etc.; `ghost` chips 36px). Limit 6.
+
+**Section 6 `services`** (`lg`, bg `#FFFFFF`): heading "Our Services" `h2`. Desktop: 2 `ServiceCard` navy panels side by side (cols 1-6, 7-12), each tall with the index numeral "01"/"02" at 120px stroke at the card top-right (`rgba(255,255,255,0.12)` stroke), icon, title (live: "Parts and Accessories", "Maintenance and Service"), shortDescription, 3 features (ring bullets), link. With more than 2 services the layout becomes a 3-up grid with the same card. Mobile stacks.
+
+**Section 7 `videos`** (`lg`, bg `#F8F9FA`): heading "Featured Videos" + subheading "Discover our work through these immersive experiences". Layout is **1 + 4**, not a 3x2 grid of identical cards: first video large (cols 1-8, 16:9) with title/description to its right? Plan 6.1 says 3x2 grid. Decision (design wins on visuals): desktop = large featured video (cols 1-7, 16:9) + vertical list of the next 5 (cols 8-12) as rows of 120x68 thumbnail + title (`h5`) + brand/product `caption`; clicking a list row swaps the large player (client). Tablet: large video above, list in 2 columns below. Mobile: large video + list rows stacked. Without JS the list rows link to the YouTube watch page. Facade per 6.16.
+
+**Section 8 `testimonials`** (hidden when empty; `lg`, bg `#EEF1F8`): single large quote at a time, Afacad 500 `quote` token, left burgundy 3px bar, author name + company in `small`; prev/next square ghost buttons, counter "1 / 3". Not a 3-card row.
+
+**Section 9 `news`** (hidden when empty; `lg`, bg `#FFFFFF`): heading "News", 3 `PostCard` (first featured wide on desktop: 2 cols + 1 stacked list of 2). 
+
+**Section 10 `ctaBanner`** (`lg`, navy `#111827` with duotone background image optional, ring field 8%): left cols 1-8 `h2` white "Need a machine, a part or a service quote?" **(proposed)**; `lead` "Tell us what you run. We reply with availability and lead time." **(proposed)**; right cols 9-12: `primary`-on-navy `lg` "Let's Talk" with `Phone` icon, below it the primary phone `+251 911 514558` as a large `tel:` link (Afacad 600 28px white) and the email in `#60A5FA`. Mobile: stacked, button full width. Directly followed by the footer (see 2.4 seam rule).
+
+Home wireframe, desktop 1440 (ASCII; `#` = navy, `.` = light):
+```
++------------------------------------------------------------------------------------------+
+| ################ utility bar (40): tel x3 | mail                    Addis Ababa ########## |
++------------------------------------------------------------------------------------------+
+| (o)BARATON  Home  About Us  Products v  Service  Contact Us     [ Search products.. / ][Let's Talk] |  80px, white
++------------------------------------------------------------------------------------------+
+|##### HERO 1440x760 photo + indigo scrim  +                                              +|
+|## ---- Official agent of Furukawa Rock Drill and Airman in Ethiopia     PRODUCT LINES 01/08|
+|##                                                                      | 01 FURUKAWA Rock Drills  JAPAN|
+|## Rock drilling, compressed                                            | 02 Air Compressor        JAPAN|
+|## air and construction                                                 | 03 Montabert            FRANCE|
+|## machinery for Ethiopia.                                              | 04 Monark              SWEDEN|
+|##                                                                      | 05 Carmix               ITALY|
+|## Importer and distributor since 2007...                               | 06 Elsasser           GERMANY|
+|##                                                                      | 07 Walter             GERMANY|
+|## [Explore products] [Request a quote]                                 | 08 Nakayama             JAPAN|
+|## +---------+---------+----------------------+---------+----------------+  (facts strip 96, #0B1220)|
+|## | 2007    | 9       | Furukawa and Airman  | 2019    | Addis Ababa    |                          |
+|## | Founded | Brands  | Official agent in ET | USA sub | Bole Road      |                          |
++------------------------------------------------------------------------------------------+
+| Brands We Work With ................................ Trusted by industry leaders worldwide|
+| [FURUKAWA] [AIRMAN] [Montabert] [Monark] [Carmix] [Elsasser] [Walter] [Nakayama] ->->->   |
++------------------------------------------------------------------------------------------+
+|######## companyStory (navy)                                                              |
+|##  +--------------------+   BARATON Group began operating in 2007, as importer and...    |
+|##  |   (o) BARATON      |   These included FURUKAWA Rock Drilling Machines from Japan... |
+|##  |   GROUP CO. (white)|   In 2019, BARATON Group expanded further...                   |
+|##  +--------------------+   Since its formation...  [Learn more] [Our Products]          |
+|##  2007 ... / 2019 ... / Today ...                                           ((ring field))|
++------------------------------------------------------------------------------------------+
+|  2007 Founded  |  9 Partner brands  |  8 Product lines  |  5 Countries      (stats strip)|
++------------------------------------------------------------------------------------------+
+| CATALOGUE                                                                                 |
+| Our Products                                                         View all products -> |
+| [Japan][France][Sweden][Italy][Germany]                                                   |
+| +--------+ +--------+ +--------+                                                          |
+| | plate  | | plate  | | plate  |   3 x 2 ProductCards (4:3 image, country badge, share)   |
+| +--------+ +--------+ +--------+                                                          |
++------------------------------------------------------------------------------------------+
+| Our Services       [ 01 Parts and Accessories (navy) ]  [ 02 Maintenance and Service ]   |
++------------------------------------------------------------------------------------------+
+| Featured Videos  / Discover our work...                                                  |
+| [ large 16:9 player (7 cols) ]   | 02 title  thumb | 03 title thumb | 04 ... (list 5 cols)|
++------------------------------------------------------------------------------------------+
+| (testimonials, news: only when populated)                                                 |
++------------------------------------------------------------------------------------------+
+|######## CTA: Need a machine, a part or a service quote?          [Let's Talk]  +251 911..|
+|######## footer: logo+blurb | Quick Links | Our Products | Contact Us ... Developed by ... |
++------------------------------------------------------------------------------------------+
+```
+Home wireframe, mobile 390:
+```
++----------------------------+
+| (o)BARATON GROUP CO.  [Q][=]|  64px
++----------------------------+
+|############################|
+|##  photo + bottom scrim  ##|
+|##                        ##|
+|## OFFICIAL AGENT OF       |
+|## FURUKAWA AND AIRMAN     |
+|## Rock drilling,           |
+|## compressed air and      |
+|## construction machinery  |
+|## for Ethiopia.           |
+|## [ ===--  ] dots 01/08   |
+|## [ Explore products    ] |
+|## [ Request a quote     ] |
++----------------------------+
+| 2007      | 9              |
+| Founded   | Partner brands |
+| Furukawa+Airman | 2019     |
++----------------------------+
+| Brands We Work With        |
+| [logo][logo][logo] ->      |
++----------------------------+
+|## companyStory (navy)      |
+|## [white logo plate]       |
+|## paragraphs               |
+|## [Learn more]             |
+|## [Our Products]           |
++----------------------------+
+| stats 2x2                  |
+| Our Products               |
+| [card]  (1 col)            |
+| [card]                     |
+| View all products ->       |
+| Our Services (stack)       |
+| Featured Videos (1+list)   |
+|## CTA  [Let's Talk]        |
+|## footer (stacked)         |
++----------------------------+
+```
+Data binding: `hero.heading` -> h1; slides auto-filled from featured products (`image`, `title`, `country`, `shortDescription`); facts from `stats.items`; brands from published brands ordered `sortOrder`; sections whose data is empty are skipped.
+
+### 7.2 About `/about`
+
+Sticky in-page sub-nav (6.10): CEO Message | Philosophy | Baraton Trade LLC | Baraton Trade PLC (live labels; plan uses anchors).
+1. **`pageHeader`** (`PageHeader`, bg `#F8F9FA`): eyebrow "About Us", `h1` "About Us" `h1` token, `lead` from `intro`; right column: a 4:5 `heroImage` (company/site photo) with plate offset OR, when missing, the large concentric ring placeholder. Desktop 8/4 split; tablet stacked; mobile: image hidden if missing.
+2. **`companyStory` + `timeline`** (bg `#FFFFFF`, `lg`): left cols 1-5 sticky `h2` ("Our story" **(proposed)**) + the 2007/2019 lead; right cols 6-12: paragraphs in `body-lg`, then **vertical timeline**: a 1px `#D1D5DB` line at x=8px of the column with 16px ring nodes (open ring, burgundy dot for the current/last item); each item: year `h3` 28 Afacad 700 `#2F447D`, title `h5`, description `body`. Seed: 2007 (import and distribution of Tata-Daewoo truck spare parts, heavy construction machinery rental), brand additions (Furukawa, Airman, Hifi Filtration, Robit), 2019 (Baraton Trade LLC, USA and woodworking factory). Reveal stagger.
+3. **`ceoMessage`** (navy `#1F2937` full-bleed band, `lg`; mirrors the live dark CEO block but composed better): heading "CEO's Message" `h2` white left-aligned. 12-col: cols 1-4 portrait (4:5, cut-out photo on a `#25376A` plate with 12px offset `#111B38`, name + role caption below: "{name}, {role}"); cols 6-12 quote in `quote` token (26/38 Afacad 500, white), a 4px x 48px `#D08A90` bar above, two paragraphs from ui-strings (the first as the quote opening; the second `body-lg` `#D1D5DB`); decorative large quotation mark SVG at 80px `rgba(255,255,255,0.12)`. Mobile: portrait 60% width left-aligned, text below.
+4. **`missionVision`** (bg `#F8F9FA`, `lg`; label "Philosophy"): two columns. Left "Mission": four numbered rows (01-04, numerals `h3` `#2F447D`) each separated by hairlines: the four live mission statements as `body-lg`. Right "Vision": a bordered white panel (1px, padding 40) with the vision paragraph in `lead` 20/32, top 4px `#2F447D` bar, closing line "Together, we shape the future!" in Afacad 600 `#2F447D`. 
+5. **`subsidiaries`** (bg `#FFFFFF`, `lg`, anchors `#baraton-trade-llc`, `#baraton-trade-plc`): two full-width panels stacked (not side-by-side cards), each a 12-col row with a 2px top rule `#111827`: left cols 1-4: oversized index numeral "01"/"02", name in `h2` ("Baraton Trade LLC", "Baraton Trade PLC"), country in `country` badge ("USA, Florida", "Ethiopia"), `agent` badge on PLC ("Official agent of Furukawa and Airman in Ethiopia"); right cols 5-12: description paragraphs; highlights as a **2-column checklist** with ring bullets (LLC: Technological Solutions; Real Estate Development and Portfolio Management; Stock and Share Portfolio Management; Global Product Distribution - PLC: Genuine replacement parts; Technical support; Self-repair resources); LLC "exclusive sales and marketing rights" list as a mini spec table (Furukawa Rock Drill Co. Ltd - Japan, Ethiopia / Airman Industries Ltd - Japan, Ethiopia). 
+6. **`capabilities`** (cardGrid, bg navy `#111827`, `md`): four capabilities in a **single row divided by hairlines** (not cards): Construction machinery, Rock drilling tools, Hydraulic attachments, Equipment servicing and support; each with a 32px Lucide icon (`Drill`, `Cog`, `Wrench`, `Hammer`) in `#60A5FA` and text `h4` white.
+7. `brandsMarquee`, 8. `stats`, 9. `ctaBanner` (as Home).
+Responsive: sub-nav chips scroll; two-column blocks stack; timeline line stays left with 16px indent on mobile.
+
+### 7.3 Products list `/products`
+- `PageHeader`: eyebrow "Catalogue" **(proposed)**, `h1` "Products", `lead` from `productsIntro`; right: result count stat ("8 product lines" in `stat` 44).
+- **Toolbar** (sticky below header: top 80/64 condensed, bg `#FFFFFF` 96% opacity, borders top/bottom hairline, height 64): search input (width 320, 44px), Country select, Category select, Brand select (each 44px, radius 4), Sort select right-aligned; result count `small` "8 products" `aria-live`. "Clear filters" `link` appears when active. Mobile: toolbar shows search + a "Filters (n)" `outline` button opening a bottom `drawer` (selects stacked, sticky "Show {n} products" `primary` button).
+- **Grid** (bg `#F8F9FA`, `md`): ProductCards 3 columns (4 at >= 1440? keep 3: plates need width), 2 tablet, 1 mobile; vertical gap 48 to give plates room. Skeleton: 6 cards.
+- Active filter chips row above grid (`tag` chips with `X`). 
+- `Pagination` below (6.13), 12 per page.
+- Empty: StatusEmpty "No products match these filters" + "Clear filters" + contact link.
+- After grid (once): a **"Can't find your model?" band** (bg `#EEF1F8`, 1px borders, padding 32): left text "Can't find the model or part you need? Send us the make and part number." **(proposed)**; right `primary` "Request a quote".
+Category pages: same with `h1` = category name, description in `lead`, indexable.
+
+### 7.4 Product detail `/products/[slug]`
+Layout 1440: breadcrumb; then top block 12-col with 24 gutters; gallery cols 1-7, summary cols 8-12 (no sticky behaviour).
+1. **Gallery** (cols 1-7): main image 4:3 on white `#FFFFFF` with 1px border and the plate offset; thumbnails row below (5 x 80px 1:1, 8px gap, active 2px `#2F447D` border); zoom icon button (`Maximize2`) bottom-right opens Lightbox; counter "1 / 6" `caption`. Missing: `ImagePlaceholder variant="product"`.
+2. **Summary** (cols 8-12): country badge + `agent` badge row; `h1` (52/56 desktop; product names are short); brand link row: "by **{brand}**" with 24px brand logo (grayscale) linking to `/brands/{slug}`; `lead` shortDescription (20/32, clamp none); **key facts list** (`features`, max 5) with ring bullets `body`; spec tile strip (up to 3 headline specs from `specs` in the "fact tile" format, 3 across, 1px bordered); CTA stack: `accent` (burgundy) `lg` "Request a quote" full-width, below two buttons side by side: `outline` `md` "Download brochure" (`Download`; "PDF, 2.4 MB" caption below), and `ghost` `md` "Share" (`Share2`). Under the stack: reassurance line `small` `#4B5563` with `Phone 16`: "Questions? Call +251 911 514558" **(proposed)**.
+3. **Tabs** (full container width, `lg` padding 64 top): Overview | Specifications | Downloads | Video. Overview = `Prose` in cols 1-8 with a right rail cols 9-12 containing "At a glance" fact table (brand, origin country, category, SKU) in spec-table style and "Related services" links. Specifications = full-width `SpecTable` with group headers (the spec-sheet centrepiece; first group open); Downloads = downloads list (6.12); Video = facade 16:9 in cols 1-8. Mobile: tabs -> accordion (6.11), Overview open by default.
+4. **Inquiry strip** (navy `#111827`, `sm`, full-bleed): row: "Interested in {title}?" `h3` white; sub "Send us the details of your site and we will confirm availability." **(proposed)**; right: phone number (Afacad 600 24px, `tel:`), WhatsApp button (`outline` on navy, `MessageCircle`) when set, `primary`-on-navy "Request a quote". Mobile stacked.
+5. **FAQ** (bg `#FFFFFF`, `md`): `h2` "Frequently asked questions" **(proposed heading)**; accordion cols 1-8.
+6. **Related products** (bg `#F8F9FA`, `lg`): `h2` "Related products"; 4 compact `ProductCard`s in one row (carousel on tablet/mobile with 1.15 visible, `carousel` Embla) ; below "Related services" as 2 horizontal text rows with `link`.
+States: 404 -> branded 404; missing gallery -> placeholder; missing brochure -> button hidden and facts strip adjusts.
+
+Product detail wireframe, desktop 1440:
+```
++------------------------------------------------------------------------------------------+
+| header (80) ........................................................................... |
+| Home > Products > Rock Drills > FURUKAWA Rock Drills                                      |
++------------------------------------------------------------------------------------------+
+| +--------------------------------------+  | | JAPAN | | OFFICIAL AGENT                  |
+| |                                      |  |                                              |
+| |        MAIN IMAGE 4:3  (plate)       |  | FURUKAWA Rock Drills            (h1)         |
+| |                               [zoom] |  | by [logo] FURUKAWA Rock Drill Co.            |
+| +--------------------------------------+  | FURUKAWA Co., began as a copper mining...    |
+| [t1][t2][t3][t4][t5]          1 / 6       |  (lead)                                      |
+|                                           | o Feature one      o Feature two             |
+|                                           | [spec tile][spec tile][spec tile]            |
+|                                           | [      Request a quote (burgundy)      ]     |
+|                                           | [Download brochure]   [Share]                |
++------------------------------------------------------------------------------------------+
+| Overview | Specifications | Downloads | Video                                              |
+|-------------------------------------------------------------------------------------------|
+| Prose (cols 1-8)                                         | AT A GLANCE (cols 9-12)       |
+| h2.. paragraph.. list.. image                            | Brand   FURUKAWA              |
+|                                                          | Origin  Japan                 |
+|                                                          | Category Rock drills          |
+|                                                          | Related services ->           |
++------------------------------------------------------------------------------------------+
+|######## Interested in FURUKAWA Rock Drills?   +251 911 514558  [WhatsApp] [Request a quote]|
++------------------------------------------------------------------------------------------+
+| FAQ (accordion)                                                                           |
+| Related products  [card][card][card][card]                                                |
+|######## CTA / footer                                                                      |
++------------------------------------------------------------------------------------------+
+```
+Tablet: gallery full width above summary (single column), thumbnails 6 across; summary 2-col (text left 5, CTAs right 3) at 768? Keep single column, CTA buttons side by side. Mobile: gallery swipe carousel with dots (no thumbnails), summary single column, sticky bottom bar (64px, bg `#FFFFFF`, top hairline, `shadow-header` inverted) with the `accent` "Request a quote" and a 44px phone icon button; tabs -> accordion.
+
+### 7.5 Brands list `/brands`
+- `PageHeader`: `h1` "Brands We Work With", lead from `brandsIntro`.
+- **Country filter chips** row (`ghost` chips 36px, active `primary` chip): All, Japan, France, Sweden, Italy, Germany (from facets, with counts in `caption`).
+- **"Official agents" feature band** (bg `#111827`, `md`): the two exclusive-agent brands (Furukawa Rock Drill Co, Airman) as two large horizontal panels (logo tile 3:2 white left 5 cols; right: name `h3` white, country, `agent` badge, description 3 lines, `link` "View brand"). Title eyebrow "Official agent in Ethiopia".
+- **All brands** (bg `#F8F9FA`, `lg`): `BrandCard` grid 4 across at 1440 (3 at 1024, 2 tablet, 1 mobile? 2 on mobile with compact tile: yes 2 columns at 390 with description hidden). Gap 24.
+- Closing `ctaBanner` with copy "Looking for a brand that is not listed?" **(proposed)**.
+
+### 7.6 Brand detail `/brands/[slug]`
+1. `BrandHero` (bg `#FFFFFF`, bottom hairline, padding 56/48): left cols 1-3 logo tile (3:2, 1px border, white) ; cols 4-9: `agent` + `country` badges, `h1` brand name, `lead` shortDescription; right cols 10-12 (desktop): `primary` "Contact us about {name}" + `link` external "Visit {name} website" with `ArrowUpRight`. Missing logo: name set as `h1` over the logo placeholder.
+2. **Description** (bg `#F8F9FA`, `lg`): `Prose` cols 3-9 (centred reading column? left aligned to cols 1-8) with a sticky right rail (cols 10-12) "Brand facts": country, products count, "Official agent" yes/no, website - spec-table style.
+3. **Video** (bg `#111827`, `lg`, only when valid id): `h2` "{name} in action" **(proposed)**, facade 16:9 centred cols 2-11 with plate `#1F2937`.
+4. **Products from {name}** (`lg`, bg `#F8F9FA`): ProductCard grid 3 columns (hidden if empty).
+5. Related services (2 text rows), other brands (carousel of brand tiles, 5 visible), `ctaBanner`.
+Mobile: BrandHero stacks (logo tile 60% width), CTAs full width.
+
+### 7.7 Services list `/services`
+- `PageHeader`: `h1` "Our Services", `lead` intro.
+- **Service rows** (bg `#FFFFFF`, `lg`): each service a full-width 12-col row separated by 2px `#111827` top rule, 64px vertical padding: left cols 1-3: index numeral "01", icon 32; cols 4-8: `h2`-size title (34/38 Afacad 700) + `lead` description + `link` "Learn more about {title}"; cols 9-12: **"What is included"** checklist (first 5 features, ring bullets, `body` 16) in a `#F8F9FA` bordered panel; services image 16:10 shown above on tablet/mobile (hidden when missing: no placeholder in list rows; the panel carries the layout). This replaces the live two-navy-boxes with a ledger-like list.
+- `ctaBanner` "Request a service" (-> /contact?subject=service).
+
+### 7.8 Service detail `/services/[slug]`
+1. Hero (bg navy `#111827`, `lg`): breadcrumb (navy variant), eyebrow "Service", `h1` white, `lead` `#D1D5DB`, `primary`-on-navy "Request this service", right cols 8-12 image 16:10 with plate `#1F2937` (placeholder on `#1F2937` when missing).
+2. **What is included** (bg `#FFFFFF`, `lg`): `h2` "What is included"; features as a numbered list in a 2-column ledger: number `h3` `#2F447D` "01", feature title (text before the en dash in source e.g. "Preventive Maintenance") as `h4` and its description after the dash as `body`; rows divided by hairlines. (Importer splits "Title - description" strings; if no separator, whole string is `h4`.)
+3. `descriptionMarkdown` (Prose cols 1-8) if present.
+4. **Process** (`process[]`, bg `#F8F9FA`, `lg`): horizontal 4-step track on desktop: step number in a 40px ring (open ring, numeral inside Afacad 700), connecting 1px line, title `h4`, text `small`; vertical stack on mobile with the line on the left.
+5. Related brands (logo row) and products (3 cards), FAQ accordion, `ctaBanner`.
+
+### 7.9 Contact `/contact`
+1. `PageHeader` "Contact Us" (title per plan) + lead "Fill out the form or contact us through these channels".
+2. **Main block** (bg `#F8F9FA`, `lg`) - the live split panel, refined: one 12-col container with a 1px `#E5E7EB` border and `shadow-sm`: left cols 1-5 navy `#111827` panel (padding 48): heading "Contact Information" `h3` white; lead; three info rows each with a 36px circular icon (`Phone`, `Mail`, `MapPin`) and label `h5` white + values `body` `#D1D5DB`: Phone (3 numbers each own line, `tel:`), Email, Address ("Bole Road, Wollo Sefer / P.O.Box 62716 / Addis Ababa, Ethiopia"), then a hairline and "Follow Us" with 36px social buttons; a second office block (Baraton Trade LLC, Florida) appears when `offices[1]` has an address, separated by hairline, with the office name `h5` and `country` badge. Right cols 6-12 white panel (padding 48): `h3` "Send us a message"; form per 6.3: Name + Email (2 cols), Phone + Company (2 cols), Subject select, product chip "Inquiry about: {product title}" (removable `tag` chip with `X`) when prefilled, Message (6 rows) with counter, consent checkbox, submit `primary` `lg` "Send Message" with `Send` icon; honeypot hidden; captcha slot above the button. Success: panel content replaced by a check-circle (`#15803D` 32px), `h3` "Message sent" **(proposed)**, body from `successMessage`, `link` "Back to home". Errors per 6.3.
+   - Mist `#E0E7FF` is used as the form panel's field-group highlight background for the product chip only (chip bg `#E0E7FF`, text `#2F447D`).
+3. **Map** (bg `#FFFFFF`, `md`): per-office tabs + `MapEmbed` facade 16:9 cols 1-8 and cols 9-12 an `<address>` card with "Get directions" `link`, hours (`Clock 16`) when set.
+4. Optional `faq` snippet (3 items) when FAQ enabled **(proposed)**.
+Responsive: tablet stacks navy info panel above the form? Decision (plan: form first on mobile): at 768 the layout is two columns 4/8; at < 768 form first (white panel), navy info panel below, then map.
+
+Contact wireframe, desktop 1440:
+```
++------------------------------------------------------------------------------------------+
+| header                                                                                    |
+| Home > Contact Us                                                                         |
+| CONTACT                                                                                   |
+| Contact Us (h1)                                                                           |
+| Fill out the form or contact us through these channels                                    |
++------------------------------------------------------------------------------------------+
+| +------------------------------+-----------------------------------------------------+   |
+| |#### Contact Information #####|  Send us a message                                  |   |
+| |#### lead                #####|  [Your Name        ] [Email Address       ]         |   |
+| |## (ph) Phone                ##|  [Phone Number     ] [Company             ]         |   |
+| |##      +251 911 514558     ##|  [Subject v                               ]         |   |
+| |##      +251 911 175644     ##|  [Inquiry about: FURUKAWA Rock Drills  x ]          |   |
+| |##      +251 114 709133     ##|  [Your Message                            ]         |   |
+| |## (@) Email                 ##|  [                                        ]         |   |
+| |##      aboma.taye@gmail.com##|  [] I agree to the processing of my data           |   |
+| |## (pin) Address             ##|  [ Send Message  > ]                                |   |
+| |##      Bole Road, Wollo Sefer ##|                                                     |   |
+| |##      P.O.Box 62716         ##|                                                     |   |
+| |##      Addis Ababa, Ethiopia ##|                                                     |   |
+| |## Follow Us (in)(x)(ig)     ##|                                                     |   |
+| +------------------------------+-----------------------------------------------------+   |
++------------------------------------------------------------------------------------------+
+| Find us                              [Addis Ababa (PLC)] [Florida, USA (LLC)]            |
+| +----------------------------------------------+  Baraton Trade PLC                       |
+| | map facade 16:9: grid + ring pin [Load map]  |  Bole Road, Wollo Sefer ...              |
+| +----------------------------------------------+  Get directions ->                       |
++------------------------------------------------------------------------------------------+
+|######## footer                                                                            |
++------------------------------------------------------------------------------------------+
+```
+
+### 7.10 News list `/news` and detail `/news/[slug]`
+**List**: `PageHeader` "News"; tag chips row (`ghost`, active `primary`); **featured post** (first, bg `#FFFFFF` bordered, 12-col: image 21:9 cols 1-7, text cols 8-12: tags, `h2`, excerpt `lead`, meta, `link` "Read article"); then grid of `PostCard` 3 columns (2 tablet, 1 mobile), pagination 9 per page. Empty: "No news yet."
+**Detail**: header block (bg `#F8F9FA`): tags, `h1` (max 22ch, 3 lines), meta row (author, `<time>`, reading time; `Share2` button right); cover image full container width 21:9 (tablet 16:10) under the header with `caption`; body: 12-col, prose cols 3-9 (max 720), sticky table of contents cols 10-12 (appears when >= 3 `h2`: `eyebrow` "On this page", links `small`, active item left bar `#2F447D`); mobile: TOC collapses into an accordion above the body. After body: related products (3 compact cards), related posts (3 `PostCard`), `ctaBanner`. Article typography: `body-lg` 18/30, h2 `h3` token.
+
+### 7.11 FAQ `/faq`
+`PageHeader` "Frequently Asked Questions" + intro; filter input (44px, `Search`) top-right (hidden without JS). Body (bg `#FFFFFF`, `lg`): 12-col; left cols 1-3 sticky group index (links with counts; active left bar `#2F447D`), right cols 4-11 accordion groups: group title `h2` 34/38 with 2px `#111827` top rule, items per 6.11. Mobile: group index becomes horizontally scrollable chips. End: `ctaBanner` "Didn't find your answer?" **(proposed)** -> Contact.
+
+### 7.12 Generic page `/[slug]`
+`default`: `PageHeader` + `Prose` in `.container-prose` (720) centred on cols 3-10, then optional sections via the registry. `legal`: `PageHeader` with "Last updated {date}" meta; two-column: sticky auto TOC cols 1-3 (`small`), prose cols 4-10; section numbering in h2 ("1. ...") via CSS counters in Afacad 600 `#2F447D`; print stylesheet removes header/footer. `landing`: sections only; first section is hero-like `PageHeader` variant on navy.
+
+### 7.13 Search `/search?q=`
+`PageHeader` compact (padding 32): `h1` "Search" (visually `h2` size 34/38), large search input (56px, full container up to 720) autofocus when empty. Result summary "{n} results for '{q}'" `small`. Chips (All, Products, Brands, Services, News) with counts. Results: list rows (not cards): 80px thumbnail (4:3, `ImagePlaceholder` on missing) + type label (`eyebrow` 12px caps `#4B5563` with a type icon) + title `h4` with highlighted match (`mark` bg `#E0E7FF`, text `#111827`, no italic) + snippet `small` clamp 2 lines + URL path `caption` `#6B7280`; row divider hairline; hover bg `#FFFFFF`. Pagination. Empty: "No results for '{q}'" + suggestions (4 featured product `ProductCard` compact) + contact link.
+
+### 7.14 404 `not-found`
+Bg `#F8F9FA`, centred layout (permitted exception): large concentric ring field (4 rings, stroke `#DDE3F1`, diameter up to 640px) centred behind the content, in the ring mark's centre the figure "404" in `display` size Afacad 700 `#2F447D` replacing the dot area; below: `h1` "Page not found" (34px), `lead` "The page may have moved or never existed. Try search, or go to one of these sections." **(proposed)**; search input 56px width 480; link row: Home, Products, Brands, Contact (`outline` `md`); below: "Popular products" 4 compact cards (hidden if API unavailable). Mobile: ring field scaled to 320px, 404 at 80px. HTTP 404.
+
+### 7.15 Thank you `/thank-you`
+Bg `#F8F9FA`, centred (exception): check-circle ring (64px open ring stroke `#15803D`, check inside), `h1` "Thank you. Your message has been sent." **(proposed)**, `lead` "We usually reply within one business day. For urgent requests call +251 911 514558." **(proposed; replace "one business day" with an approved SLA before launch)**, buttons `primary` "Back to home", `outline` "Browse products". Noindex.
+
+### 7.16 Cross-page details that make it feel designed (checklist for implementers)
+1. Eyebrow with burgundy tick above every `h2`/`h1`.
+2. Oversized stroke numerals on About, Home services, Services list.
+3. Spec-sheet tables (2px top rule, caps labels, tabular numerals) on product, brand facts, subsidiaries.
+4. Product plates (solid offset block) on product images only.
+5. Ring field (max one per two sections), ring bullets in lists, ring spinner and ring placeholder.
+6. Hairline-divided stat strips instead of boxed stat cards.
+7. Real brand names in `white-space: nowrap`, countries as text badges with burgundy tick.
+8. Navy/light alternation with the footer seam rule.
+
+---
+
+## 8. Admin CMS visual design
+
+Principle: the admin shares the public tokens (same colours, fonts, radius, focus ring) but is a calm, dense work tool: smaller type, tighter spacing, no hero imagery, no decorative motifs (no ring fields, no index numerals, no plates). The ring mark appears only in the sidebar logo, the login card and the spinner.
+
+### 8.1 Tokens and density
+- Base font size 14px (Roboto 400, line-height 20px); headings Afacad Flux: page title 24/30 weight 700, section title 18/24 weight 600, card title 16/22 weight 600. Table text 14/20; meta 12/16.
+- Spacing steps used: 4, 8, 12, 16, 24 (never 48+). Page padding 24 (mobile 16). Card padding 16 (dense) / 24 (forms).
+- Controls: height 36 (default), 32 (compact table filters), 44 on touch devices (< 1024). Radius 4. Inputs border `#878F9D`.
+- Row heights: table rows 40 (density "Compact" 32, "Comfortable" 48), user toggle persisted in `localStorage` (default 40).
+- Colours: canvas `#F8F9FA`, cards `#FFFFFF` with 1px `#E5E7EB` border, no shadow (popovers/dialogs use shadows). Admin dark mode (`.dark`): canvas `#0B1220`, cards `#111827`, border `rgba(255,255,255,0.12)`.
+
+### 8.2 Shell (`AdminShell`)
+- **Sidebar**: width 248px expanded, 64px collapsed (icon-only with tooltips); bg `#111827` in both themes; logo block 64px high (mark 28px + "Admin" label `small` `#9CA3AF`); group labels `eyebrow`-style 11px caps `#9CA3AF`, 12px padding; item height 36, radius 4, icon 18 stroke 1.5 `#9CA3AF`, text 14px `#D1D5DB`; hover bg `#1F2937` text white; **active**: bg `#1F2937`, text white, 3px left bar `#60A5FA`, icon `#60A5FA`. Badges (unread messages) `count` badge on the navy sidebar uses bg `#D08A90` text `#0B1220` (6.88 contrast). Footer of sidebar: user avatar + name + "Sign out". Groups per plan 8.1 (Overview, Content, Media, Inbox, Site, System).
+- **Topbar**: height 52, bg `#FFFFFF` (dark: `#111827`), bottom hairline; left: sidebar toggle (icon-sm) + breadcrumb (`small`); centre-left: command trigger (`Search` + "Go to..." + `kbd` Ctrl K, width 320, height 32, border `#D1D5DB`); right: "View site" `ghost sm` with `ArrowUpRight`, bell/unread count (icon-sm with `count` badge), theme toggle (`Sun/Moon`), user menu.
+- Content area: max-width none for lists; forms max 1200 (main column + 320 sidebar).
+- Mobile (< 1024): sidebar becomes a `sheet`; topbar 52 with menu button, title, user menu; tables become card-lists (see 8.4).
+
+### 8.3 Dashboard
+12-col grid, gap 16. Row 1: 4 `StatCard`s (Published products, brands, services, posts) then Unread messages as an emphasised card (left 3px `#843C40` bar). StatCard: bg white, border, padding 16, label `small` `#4B5563`, value Afacad 700 32/36 `#111827` (tabular), delta chip (`+3 this week`) `status` style, optional sparkline (40px, stroke `--chart-1`, no fill). Row 2: Messages chart (bar, last 30 days; cols 1-8) with Recharts via shadcn `chart`: bars `--chart-1`, grid lines `#E5E7EB`, axis `#6B7280` 12px, tooltip card style; cols 9-12 "Needs attention" checklist (missing SEO, missing alt text, broken YouTube links, 404 hits) each row with `AlertTriangle 16` `#B45309` + count + link. Row 3: Recent messages (5 rows, unread bold + `#843C40` dot), Content status table, Recently edited, Scheduled. Quick actions as a row of `outline sm` buttons under the page title (New product, New post, Upload media, Edit homepage, Revalidate cache). Per-widget skeleton/error (6.18 compact variant, icon 20, text `small`).
+
+### 8.4 Data tables (`DataTable`)
+- Header row: height 40, bg `#F1F3F5`, `table-head` 12px caps `#4B5563`, sticky under the topbar (`top: 52`), sortable columns show `ArrowUp/Down 14`; border-bottom 1px `#D1D5DB`.
+- Rows: bg white, hover `#F8F9FA`, selected `#EEF1F8` with 2px left bar `#2F447D`, border-bottom `#E5E7EB`. Checkbox column 40px. Title column: link 14px 500 `#111827` + slug `caption` `#6B7280` below. Thumbnails 40x30 radius 2 with `ImagePlaceholder` (compact: ring only).
+- Status chips per 6.4 (`status-*`). SEO score dot 10px (green `#15803D`, amber `#B45309`, red `#B91C1C`) always with `title`/`aria-label` text.
+- Toolbar above table: search (width 280, 36), filter selects, status tabs as underline tabs (6.10 at height 40), column visibility, density toggle. Bulk bar replaces toolbar when rows are selected: bg `#111827` text white, radius 4, height 48, actions as `ghost` white buttons, "n selected" count.
+- Pagination bottom: "Rows per page 25" select, range text, prev/next icon buttons.
+- Mobile: each row becomes a 2-line list item (thumbnail, title, status chip, kebab menu); filters in a `drawer`.
+- Empty: `StatusEmpty` compact ("No products found" + "Add your first product"); Error: retry.
+
+### 8.5 Forms (`EntityFormScreen`)
+- Layout: sticky `PublishBar` (height 56, bg white, bottom hairline, z 30): left: back arrow + entity title (`h1` 20/26 truncated) + `StatusBadge` + "Saved 2 min ago" `caption`; right: `ghost` History, `outline` Preview, `outline` Save draft, `primary` Publish (or Update), kebab (Duplicate, Archive, Delete). Dirty indicator: 8px `#B45309` dot + "Unsaved changes" `caption`; autosave: "Draft autosaved" fades after 3s.
+- Two columns >= 1280: main (cols 1-8, white card sections separated by 16px) and a 320px aside (status, slug, featured, sort order, dates) sticky at top 72. Tabs (Content | Media | Details | SEO | Relations) underline style under the PublishBar, sticky.
+- Field groups: card with title `h3` 16/22, description `small` `#4B5563`, 16px gaps between fields, labels 14px 500. Two-column field rows for short fields. Repeaters (`RepeaterField`): each row a bordered `#E5E7EB` strip with drag handle (`GripVertical 16` `#6B7280`), fields, delete `icon-sm ghost` (`Trash2`); "Add {item}" `outline sm` with `Plus`. Counters on length-limited fields (`caption`, turn `#B45309` beyond 90%, `#B91C1C` over).
+- Slug field: prefix chip `/products/` `#F1F3F5` + input + lock/unlock icon; URL preview below `caption`.
+- Validation messages as in 6 (global error state). Form-level error alert at top (shadcn `alert`, danger tokens, `AlertCircle`).
+- Concurrency/unsaved dialogs use `alert-dialog` (6.15).
+
+### 8.6 Rich text editor (`RichTextEditor`, Tiptap)
+Bordered container (1px `#878F9D`, radius 4, focus ring as inputs). Toolbar (height 44, bg `#F8F9FA`, bottom hairline, sticky within the field when taller than viewport): groups separated by 1px dividers: Heading select (Paragraph/H2/H3/H4), Bold, Italic, Link, Bullet list, Numbered list, Quote, Table, Image (opens media picker), YouTube, Horizontal rule | right: "Visual / Source" `toggle-group`, word count `caption`. Toolbar buttons 32x32 icon `ghost`, active state bg `#DDE3F1` text `#25376A`. Editing surface uses the same `.prose` styles as the public site at 16px (WYSIWYG fidelity), min-height 320, padding 16. Source tab: no monospace face is introduced; use Roboto 14px in a textarea with `#F8F9FA` bg.
+
+### 8.7 Media library
+Left folder tree (width 240, bg `#FFFFFF`, border-right; selected folder bg `#EEF1F8` + 3px left bar; count `caption`), main area: toolbar (search, type filter, sort, view toggle `toggle-group`, Upload `primary sm`), drag-drop overlay: whole page dashed 2px `#2F447D` border, bg `rgba(47,68,125,0.06)`, centred text "Drop files to upload". Grid cards: 4:3 thumbnails (min 180px) on `#F1F3F5` with `ImagePlaceholder` for non-images (file-type icon + extension caps), filename `small` truncated, dimensions/size `caption`; hover shows select checkbox top-left and "Needs alt" `warning` chip top-right when alt missing. Selected: 2px `#2F447D` border. Detail drawer (sheet right, 420px): preview on checker-free `#F1F3F5`, form fields, usage list (links), crop/focal point tool: preview with a draggable 20px ring marker (open ring + dot) for the focal point and aspect preset `toggle-group` (1:1, 4:3, 16:9, 1.91:1) with overlay frame `rgba(17,24,39,0.5)` outside the crop. `UploadQueue`: fixed bottom-right panel 360 wide, rows with 4px progress bar (`#2F447D`), cancel/retry icons, success check `#15803D`.
+
+### 8.8 Homepage builder
+Two-panel: left (width 360) ordered section list: each row 56px, bg white, border, radius 4, drag handle, section icon (Lucide per registry) 20, label `small` 500, type `caption` `#6B7280`, `switch` (enabled), kebab; active row bg `#EEF1F8` + 3px left bar `#2F447D`; dragging: `shadow-md`, 2px dashed drop line `#2F447D`. Right: editor form for selected section (card, 8.5 styles) with a header (icon + name + "Reset section"). Optional bottom preview thumbnail: low-fidelity wireframe of the section (grey bars) - no live render. "Add section" dialog: 2-column grid of registry types, each a bordered tile with icon, label, one-line description, `allowedOn` caption; keyboard selectable. Top bar actions per plan 8.7.
+
+### 8.9 Navigation editor
+Tree rows with indent 24 per level, connector line 1px `#D1D5DB`, drag handle, label input inline, type `select` compact, visibility `switch`, "Add child" `ghost sm`. Mega item rows show a `Layers` icon and `megaSource` select. Right pane: live preview card: `MegaMenu` + `MobileNav` miniatures at 50% scale inside a framed `#F1F3F5` viewport (non-interactive). Broken target rows get a `danger` chip "Target missing".
+
+### 8.10 SEO panel and SERP preview
+`SeoPanel`: collapsible card; inputs with live counters and a coloured length bar (4px, grey -> green within ideal range `#15803D`, amber `#B45309` out of range, red `#B91C1C` over cap). **SERP preview** (white card, border, padding 16, desktop/mobile `toggle-group`): breadcrumb line (favicon 16 + site name + path) in 12px `#4B5563`, title 20/26 Roboto `#2F447D` (never a purple link colour), URL line `#4B5563`; description 14/22 `#4B5563`, truncated at 600px title width / 920px description with ellipsis (desktop), 360px mobile. **Social preview** card: 1.91:1 image placeholder (`ImagePlaceholder`), domain `caption` caps, title `h5`, description 2 lines, in a 1px bordered box. **Score**: 0-100 ring gauge 56px (stroke 6px: red <50 `#B91C1C`, amber 50-79 `#B45309`, green >= 80 `#15803D`) with the number centred; checklist rows with icons `CheckCircle2` (green), `AlertTriangle` (amber), `XCircle` (red) + rule text + fix hint in `caption`. Never colour alone: icon and text always present.
+
+### 8.11 Status chips (admin)
+See 6.4 status variants. Message statuses: `new` (burgundy-tint), `read` (neutral), `in_progress` (info), `replied` (success), `archived` (neutral outlined), `spam` (danger outlined). Publish state in `PublishBar` uses the same chip, 28px high.
+
+### 8.12 Messages inbox
+Two panes >= 1024: list 400px (rows 72px: unread dot 8px `#843C40`, sender 14px 600, time `caption` right, subject 14px, preview 13px `#4B5563` 1 line, product chip `tag`), detail flexible: header (name, email `mailto`, phone `tel`, received `caption`), status select, message body in `body` 16/26 `#111827` preserving line breaks in a white card with padding 24, metadata `dl` in `small`, internal notes textarea, actions row. Empty detail: centred "Select a message / Choose a message from the list to view details" (live copy). Selected row bg `#EEF1F8` + left bar. Mobile: list then full-screen detail with back button.
+
+### 8.13 Auth screens
+Centred card (width 400, padding 32, radius 6, border, `shadow-md`) on `#F8F9FA`; logo mark 40px above `h1` "Baraton Login" (Afacad 700 28/32), form fields 44px, `primary` full width `lg`; "Forgot Password?" `link`; error alert above fields; OTP step uses 6 boxes 48x56 with 1px `#878F9D`, radius 4. Footer line `caption` `#6B7280`. Background: plain; optional 1px grid pattern at 3% (technical-grid motif) is NOT used.
+
+### 8.14 Empty / error / loading states
+Empty tables and lists: 32px icon, `h4`, `small` description, `primary sm` action ("Add your first product"). Error: `AlertTriangle`, message, "Try again". Loading: skeleton rows matching row height; buttons show spinner; page-level top loader 2px. 403/404 inside admin: same compact status component.
+
+### 8.15 Sharing tokens with the public site
+Same CSS variables (`:root`), same fonts via `next/font`, same shadcn components with the same variants. Differences are only: base size 14, control height 36, no motifs, sidebar navy in both themes, `.dark` allowed (admin only), no public-only effects (plates, ring fields, reveal-on-scroll, header condense). `AdminShell` sets `data-admin` on `<body>` so density tokens (`--control-h: 36px`, `--text-base: 14px`) apply.
+
+---
+
+## 9. Responsive and accessibility rules
+
+### 9.1 Responsive
+- Mobile-first CSS; layouts defined at 390, 768, 1024, 1280, 1440. No horizontal page scroll at any width >= 320. Content reflows at 320 with no loss; text scales to 200% without clipping.
+- Breakpoint behaviour summary: nav collapses < 1024; two-column blocks stack < 768 (< 1024 for product detail); grids 1/2/3 columns at <640 / 640-1023 / >= 1024; tables stack < 640.
+- Images use `sizes` matching the grid (e.g. product card `(min-width:1024px) 384px, (min-width:640px) 50vw, 100vw`).
+- Safe areas: bottom sticky bars add `env(safe-area-inset-bottom)`.
+
+### 9.2 Tap targets and spacing
+Minimum 44x44 CSS px on the public site (WCAG 2.2 target size AA minimum is 24x24; this spec uses 44 as the standard); minimum 8px between adjacent targets. Admin: 36px on desktop, 44px under 1024. Inline text links in prose are exempt but have 3px offset underline and >= 24px line pitch.
+
+### 9.3 Focus
+All interactive elements show the 2px focus ring (light `#0D5380`, navy `#60A5FA`, offset 2px). Order follows DOM = visual order. Skip link first focusable. Focus returns to the trigger after dialogs/sheets/menus close. On route change focus moves to the page `h1` (`tabIndex=-1`). Carousel: arrow keys within; autoplay pauses on focus.
+
+### 9.4 Colour-blind safety and non-colour cues
+Status always has icon + text. Charts: series differ in lightness and use direct labels/patterns (dash styles) in addition to colour; chart-1 (indigo) and chart-3 (burgundy) have similar luminance, so line series add distinct marker shapes and dash patterns and never rely on those two colours alone. Links in text are underlined. Form errors have icon + message. Selected states use bar + background (not colour only). Do not rely on red/green alone for pass/fail: use `CheckCircle2`/`XCircle` icons.
+
+### 9.5 Reduced motion and other preferences
+`prefers-reduced-motion: reduce`: see 5.1. `prefers-contrast: more`: `--border` becomes `#6B7280`, text-tertiary becomes `#374151`, focus ring 3px. `forced-colors: active`: rely on system colours; keep borders on buttons (`border: 1px solid ButtonText`), SVG icons use `currentColor`. `prefers-color-scheme` is not auto-applied on the public site.
+
+### 9.6 Semantics (design-relevant)
+One `h1`; headings never skipped; landmarks per plan 5.9; every icon-only button has `aria-label`; decorative rings/numerals/crosses `aria-hidden="true"`; marquee duplicate track `aria-hidden` and non-focusable (`inert`); status messages (`aria-live="polite"`) for filter result counts and form success; error summary `role="alert"`. Language attribute on foreign-language snippets when added.
+
+### 9.7 Ethiopic / Amharic / RTL readiness
+- Ethiopic script reads left-to-right (no RTL needed for Amharic). The system must still be written with logical CSS properties (`margin-inline`, `padding-inline`, `inset-inline-start`, `text-align: start`) so an RTL locale (e.g. Arabic) can be added without rewrites; use `dir` on `<html>` from locale settings.
+- Font: when `lang="am"` (or `lang="ti"`), body and headings stack: `var(--font-ethiopic), "Noto Sans Ethiopic", "Nyala", sans-serif`. Noto Sans Ethiopic subset `ethiopic` only; weights 400/600/700 mapped from 400/500/600/700 (500 -> 400... keep 600 for headings).
+- Metrics: Ethiopic glyphs are taller; apply +0.1 line-height (`body` 1.75, headings 1.3) and remove negative letter-spacing and uppercase transforms when `lang` is `am`; allow +25% width in buttons/nav (never fixed widths); mark `eyebrow` text as sentence case in `am`.
+- Layouts must tolerate 30-40% longer strings (nav, buttons, badges wrap to two lines gracefully; badge min-width not max-width).
+- Numerals: Latin digits for phone numbers and dates; Ethiopic numerals not used.
+
+---
+
+## 10. Design-to-code handoff
+
+### 10.1 shadcn components to customize (and how)
+
+All shadcn components live in `components/ui`. Customize only via tokens (`globals.css`) and the `cva` variant definitions below (edit the generated file's `cva` config; do not fork logic). Keep Radix behaviour.
+
+| Component | Customization |
+|---|---|
+| `button` | `cva` variants: `primary` (new default, replaces shadcn `default`), `dark`, `secondary`, `outline`, `ghost`, `accent`, `link`, `destructive`; sizes `sm`/`md`/`lg`/`icon`/`icon-sm` per 6.1; base classes `rounded font-display font-semibold tracking-[0.01em] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring`; add `loading` prop (spinner, `aria-busy`); add `navy` handled automatically via `.section-navy` tokens (variants use token colours `bg-primary`, not hex). |
+| `badge` | variants `country`, `agent`, `tag`, `count`, `status-published|draft|scheduled|archived|new|read|in_progress|replied|spam`; radius 2px; uppercase variants set `tracking-[0.06em] text-xs uppercase`. |
+| `card` | no shadow, `rounded-none`, border `border-border`; add `interactive` variant (hover `shadow-sm border-indigo-200`, stretched-link support) and `plate` variant (offset device). |
+| `input`, `textarea`, `select` | height `h-11` (public) / `h-9` under `[data-admin]`, `border-input`, `rounded`, focus `border-ring ring-2 ring-ring`, error via `aria-invalid:border-destructive aria-invalid:ring-destructive`. |
+| `checkbox`, `radio-group`, `switch` | sizes and colours per 6.3 using `bg-primary` for checked. |
+| `label` | `text-sm font-medium`. |
+| `navigation-menu` | header nav + mega panel per 6.6; viewport `shadow-md`, `rounded-none`, width container. |
+| `sheet` | mobile nav (right, `w-[min(92vw,400px)]`), admin sidebar (left), filters. |
+| `command` | search palette per 6.6; selected item bar. |
+| `dialog`, `alert-dialog`, `drawer` | radius 6, overlay `bg-[rgba(11,18,32,0.6)]`, `shadow-lg`. |
+| `tabs` | underline variant (6.10) as default; `TabsList` no background. |
+| `accordion` | per 6.11 (border rows, chevron indigo). |
+| `table` | spec table + generic + admin styles via variants `spec`, `default`, `admin`. |
+| `breadcrumb` | per 6.9. |
+| `pagination` | per 6.13, anchor-based. |
+| `carousel` | Embla; hero uses custom controls; arrows are `icon` `outline` buttons 44px at edges on desktop, hidden on touch. |
+| `sonner` | per 6.14 (`toastOptions.classNames`). |
+| `skeleton` | static `bg-border` with `animate-pulse` replaced by custom keyframe `skeleton-pulse` (opacity 1 -> .6, 1.4s). |
+| `tooltip`, `popover`, `dropdown-menu`, `select` content | `rounded`, `shadow-md`, `border-border`, item height 40. |
+| `sidebar` | tokens `--sidebar-*`; width 248 / 64; active bar via `data-[active=true]:before:` 3px `bg-sidebar-primary`. |
+| `chart` | colours from `--chart-1..5`, grid `stroke-border`. |
+| `form` | label/description/message styles from 6.3. |
+| `calendar`, `slider`, `progress`, `toggle`, `toggle-group`, `input-otp`, `scroll-area`, `separator`, `skeleton`, `avatar`, `aspect-ratio`, `collapsible`, `hover-card`, `alert` | token-driven; `alert` variants `info|success|warning|destructive` use semantic token pairs (2.6). |
+New project components (not shadcn): `ImagePlaceholder`, `RingMark`, `RingDivider`, `RingField`, `Eyebrow`, `SectionIndex`, `StatItem`, `SpecTable`, `FactTile`, `ProductPlate`, `Kbd`, `Callout`.
+
+### 10.2 Tailwind theme extension (spec; Tailwind 4 `@theme`)
+
+```css
+@theme inline {
+  /* colour roles -> shadcn tokens */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);  --color-chart-4: var(--chart-4);  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-link: var(--link);  --color-sky: var(--sky);  --color-mist: var(--mist);
+  --color-success: var(--success);  --color-warning: var(--warning);
+  --color-danger: var(--danger);    --color-info: var(--info);
+
+  /* fixed palette scales (literal hex; use sparingly, prefer role tokens) */
+  --color-indigo-50:#EEF1F8; --color-indigo-100:#DDE3F1; --color-indigo-200:#BCC8E2; --color-indigo-300:#92A3CD;
+  --color-indigo-400:#6479B0; --color-indigo-500:#475E98; --color-indigo-600:#3A5188; --color-indigo-700:#2F447D;
+  --color-indigo-800:#25376A; --color-indigo-900:#1B2A52; --color-indigo-950:#111B38;
+  --color-steel-50:#EDF6FB; --color-steel-100:#D5E9F5; --color-steel-200:#AAD2EA; --color-steel-300:#74B3DB;
+  --color-steel-400:#3C8DC1; --color-steel-500:#1B6FA3; --color-steel-600:#0D5380; --color-steel-700:#0B4469;
+  --color-steel-800:#0A3652; --color-steel-900:#082A40;
+  --color-burgundy-50:#FBF1F2; --color-burgundy-100:#F4DDDF; --color-burgundy-200:#E6B8BC; --color-burgundy-300:#D08A90;
+  --color-burgundy-400:#B35A62; --color-burgundy-500:#9A454D; --color-burgundy-600:#843C40; --color-burgundy-700:#6D3034;
+  --color-burgundy-800:#572628; --color-burgundy-900:#3F1C1E;
+  --color-slate-50:#F8F9FA; --color-slate-100:#F1F3F5; --color-slate-200:#E5E7EB; --color-slate-300:#D1D5DB;
+  --color-slate-400:#9CA3AF; --color-slate-500:#6B7280; --color-slate-600:#4B5563; --color-slate-700:#374151;
+  --color-slate-800:#1F2937; --color-slate-900:#111827; --color-slate-950:#0B1220;
+
+  /* fonts */
+  --font-display: var(--font-display), "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  --font-sans: var(--font-sans), system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+
+  /* breakpoints */
+  --breakpoint-sm: 40rem; --breakpoint-md: 48rem; --breakpoint-lg: 64rem; --breakpoint-xl: 80rem; --breakpoint-2xl: 96rem;
+
+  /* radius */
+  --radius-none: 0; --radius-sm: 2px; --radius: 4px; --radius-md: 6px; --radius-lg: 6px; --radius-full: 9999px;
+
+  /* spacing base 4px: Tailwind default --spacing: 0.25rem (do not change) */
+
+  /* shadows */
+  --shadow-xs: 0 1px 2px rgba(17,24,39,0.06);
+  --shadow-sm: 0 1px 3px rgba(17,24,39,0.08), 0 1px 2px rgba(17,24,39,0.04);
+  --shadow-md: 0 4px 12px rgba(17,24,39,0.08);
+  --shadow-lg: 0 12px 32px rgba(17,24,39,0.12);
+  --shadow-header: 0 1px 0 rgba(17,24,39,0.08);
+
+  /* font sizes: [size, line-height, letter-spacing] per 3.2 desktop values; responsive via utility classes below */
+  --text-display: 4.5rem;   --text-display--line-height: 1;        --text-display--letter-spacing: -0.02em;
+  --text-h1: 3.25rem;       --text-h1--line-height: 1.077;         --text-h1--letter-spacing: -0.015em;
+  --text-h2: 2.5rem;        --text-h2--line-height: 1.1;           --text-h2--letter-spacing: -0.01em;
+  --text-h3: 1.75rem;       --text-h3--line-height: 1.214;
+  --text-h4: 1.375rem;      --text-h4--line-height: 1.273;
+  --text-h5: 1.125rem;      --text-h5--line-height: 1.333;
+  --text-lead: 1.25rem;     --text-lead--line-height: 1.6;
+  --text-body-lg: 1.125rem; --text-body-lg--line-height: 1.667;
+  --text-body: 1rem;        --text-body--line-height: 1.625;
+  --text-small: 0.875rem;   --text-small--line-height: 1.571;
+  --text-caption: 0.75rem;  --text-caption--line-height: 1.5;
+  --text-eyebrow: 0.8125rem; --text-eyebrow--line-height: 1.231;   --text-eyebrow--letter-spacing: 0.14em;
+  --text-stat: 4rem;        --text-stat--line-height: 1;           --text-stat--letter-spacing: -0.02em;
+
+  /* motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* keyframes */
+  --animate-marquee: marquee 40s linear infinite;
+  --animate-marquee-slow: marquee 60s linear infinite;
+  --animate-reveal: reveal 400ms var(--ease-out) both;
+  --animate-fade-in: fade-in 150ms var(--ease-out) both;
+  --animate-spin-ring: spin 1s linear infinite;
+  --animate-skeleton: skeleton-pulse 1.4s ease-in-out infinite;
+  --animate-progress: progress var(--autoplay, 6000ms) linear forwards;
+  @keyframes marquee { from { transform: translateX(0) } to { transform: translateX(-50%) } }
+  @keyframes reveal { from { opacity: 0; transform: translateY(16px) } to { opacity: 1; transform: translateY(0) } }
+  @keyframes fade-in { from { opacity: 0 } to { opacity: 1 } }
+  @keyframes skeleton-pulse { 0%,100% { opacity: 1 } 50% { opacity: .6 } }
+  @keyframes progress { from { transform: scaleX(0) } to { transform: scaleX(1) } }
+}
+```
+Responsive type utilities (add as `@utility` or component classes; values from 3.2): `.t-display` = `clamp(40px, 5vw + 8px, 72px)`/1.0; `.t-h1` = `clamp(34px, 3.2vw + 12px, 52px)`; `.t-h2` = 28px (<640) / 34px (640-1023) / 40px (>=1024); `.t-h3` = 22 / 26 / 28; `.t-lead` = 18 / 19 / 20. Heading elements get `font-display`, `text-wrap: balance`, colour `foreground` via base layer.
+Container utilities: `.container-site`, `.container-prose`, `.container-wide` per 4.2.
+Section spacing utilities: `.section-lg`, `.section-md`, `.section-sm` per 4.3 (responsive padding-block).
+
+### 10.3 Naming conventions
+- Tokens: CSS variables kebab-case without prefix for shadcn roles (`--primary`), `--brand-*`, `--surface-*`, `--text-*`. Tailwind usage prefers role tokens (`bg-primary`, `text-muted-foreground`, `border-border`); raw palette utilities (`bg-indigo-700`) only inside token definitions, the logo/graphic devices and the navy hero overlays.
+- Components: PascalCase files (per plan 3.1); variants via `cva` named `xxxVariants`; sections `XxxSection`; props follow the plan's block contracts exactly.
+- CSS classes for utilities/devices: `section-navy`, `section-footer`, `plate`, `ring-field`, `ring-bullet`, `eyebrow`, `spec-table`, `t-*` type utilities.
+- Data attributes: `data-reveal`, `data-theme` (none on the public site), `data-admin` on admin body, `data-state` (Radix).
+- Test ids: `data-testid="section-{type}"`, `hero-index-{n}`, `product-card-{slug}`.
+- Icon names: Lucide import names exactly; one central `icons.ts` re-export for sizing helper `Icon size={16|20|24|32}` with stroke 1.5.
+
+### 10.4 Asset list to produce
+| Asset | Spec |
+|---|---|
+| `logo-full.svg` | vectorised from `docs/source/logo.png`; ring `#2F447D`, dot `#843C40`, "BARATON" `#2F447D`, "GROUP CO." `#843C40`; transparent bg; viewBox tight to clear space |
+| `logo-full-white.svg` | all `#FFFFFF`, dot `#D08A90` |
+| `logo-mark.svg`, `logo-mark-white.svg` | ring + dot only, square viewBox 0 0 100 100 |
+| Favicon set | `favicon.ico` (16/32/48), `icon.svg` (mark; dot stays burgundy; ring `#2F447D`; `prefers-color-scheme: dark` variant ring `#FFFFFF`), `favicon-32x32.png`, `apple-touch-icon.png` 180x180 (mark on `#FFFFFF`, 20% padding), `android-chrome-192x192.png`, `512x512.png`, `maskable-512.png` (white ring mark on `#111827`, safe zone 80%), `site.webmanifest` `theme_color` `#2F447D`, `background_color` `#F8F9FA`; `safari-pinned-tab.svg` monochrome |
+| OG image template (1200x630) | bg `#111B38`, ring field `rgba(255,255,255,0.08)` right, left column: `logo-full-white`, eyebrow caps (type/country) `#D08A90`, title Afacad Flux 700 64/68 white max 2 lines, bottom row site name + domain `#9CA3AF` 24px, optional cover image on the right half with scrim; default variant (no entity): tagline from settings |
+| Placeholder artwork | `/placeholders/product.svg`, `logo.svg`, `generic.svg`: ring-mark placeholder per 4.7 in light and navy variants (`*-dark.svg`) at 1200x900 / 900x600 |
+| Ring pattern SVGs | `ring-field.svg` (3-4 concentric open rings, stroke 1px, `currentColor`), `ring-bullet.svg`, `ring-spinner.svg` |
+| Social icons | inline SVGs for Facebook, X, LinkedIn, Instagram, YouTube, TikTok, Telegram, WhatsApp (20px, `currentColor`) |
+| Hero fallback | no stock image is shipped; fallback is a solid `#111B38` with the ring field |
+| Fonts | loaded via `next/font/google` (no self-hosted files except OG `ImageResponse` TTFs: Afacad Flux 700 and Roboto 400/500 in `public/fonts`) |
+
+### 10.5 Visual QA checklist (numbered, verifiable)
+
+Tokens and global
+1. `globals.css` defines every token in 2.6 with exactly those hex values; DevTools shows `--primary` = `#2F447D` on `:root` and `#FFFFFF` inside `.section-navy`.
+2. Page background computes to `rgb(248,249,250)`; default text colour `rgb(17,24,39)`; body text colour in prose `rgb(55,65,81)`.
+3. Only two Latin font families load (Network tab: Afacad Flux + Roboto); `h1`-`h6`, nav, buttons are Afacad Flux; body, inputs, tables are Roboto; no layout shift on font swap (CLS < 0.02).
+4. Type scale: at 1440 `h1` computes to 52px/56px weight 700; `display` 72/72; body 16/26; at 390 `h1` 34/38, `display` 40/42.
+5. No `border-radius` above 6px exists in the DOM except avatars, dots, switch thumb and social circle buttons (run a computed-style audit).
+6. No gradients anywhere except the navy scrim over hero/CTA photographs (search CSS for `gradient`: only 4.7 values); no purple/pink/violet hex in the built CSS (grep for hue 250-330 shades other than indigo `#2F447D` family).
+7. `backdrop-filter` is used only on the condensed header.
+8. Contrast: all text/background pairs on the page are in 2.3 or have >= 4.5:1 (run axe `color-contrast` on every template: zero violations).
+
+Layout
+9. Container is 1280 outer / 1200 content at >= 1280; side margins 40 (>= 1024), 32 (640-1023), 16 (< 640); header, page content and footer left edges align exactly.
+10. Section padding matches 4.3 (lg 96/72/56) at 1440/768/390; no section uses an off-scale value.
+11. Light and navy sections alternate; the CTA banner and footer are separated by a visible seam (`#0B1220` footer vs `#111827` CTA plus 1px hairline).
+
+Header/footer
+12. Desktop header: utility bar 40px (`#111827`), main bar 80px white with logo 44px, nav 16px Afacad 500, search trigger, dark "Let's Talk" button 44px high; active nav item has 2px burgundy underline.
+13. After scrolling 24px the utility bar collapses, bar becomes 64px, logo 36px, blur applied; with JS disabled the header is the expanded state and still sticky.
+14. Products mega-menu opens on hover-intent 120ms, shows Categories / Brands / Featured; closes with Esc; fully keyboard operable.
+15. Mobile header 64px; sheet nav shows search, 56px rows, sticky navy bottom block with CTA and phone links.
+16. Footer: 4 columns (4/2/3/3 on the grid), navy `#0B1220`, arrows `#60A5FA`, legal row with "Developed by Dagim Meseret" (no gradient, no "xyberlabs"), copyright "© {year} Baraton Group Co. All rights reserved."
+
+Components
+17. Primary button: 44px high, `#2F447D`, hover `#3A5188`, 2px `#0D5380` focus ring with 2px offset; all buttons have 4px radius; `accent` burgundy appears at most once per page.
+18. Inputs 44px high with `#878F9D` border, 16px text; error state shows red border, icon and message; focus shows ring.
+19. Country badges are text-only with a burgundy tick, no flags/emoji.
+20. Product card: 4:3 image on white with a 12px `#E5E7EB` offset plate, country badge top-left, share top-right, title Afacad 600 22/28, 3-line clamp description, link with arrow; no shadow at rest.
+21. Spec table has a 2px `#111827` top rule, caps group headers, tabular numerals, stacked rows on mobile.
+22. Missing images always render the ring-mark placeholder (test by blocking the media host): no broken image icon anywhere.
+23. Dialogs/sheets/toasts follow 6.14-6.15; toasts never overlap the cookie banner.
+
+Pages
+24. Home: hero shows the persistent `h1` headline, product index rail (01-08) with progress line, facts strip of 5 items; carousel pauses on hover/focus and stops under reduced motion; only one `h1` on the page.
+25. Home sections appear in the order of 7.1; empty-data sections are skipped; services use navy panels with index numerals; videos use 1 large + list layout.
+26. About: sticky sub-nav highlights the section in view; CEO block is navy with a portrait on a plate; subsidiaries are full-width ledger rows with anchors `#baraton-trade-llc` and `#baraton-trade-plc`.
+27. Products list: sticky toolbar, 3/2/1 column grid, plates not clipped, pagination uses anchors, filtered URLs preserved on page change.
+28. Product detail: gallery + summary split 7/5 at 1440, single column at 768/390; burgundy "Request a quote"; tabs (accordion on mobile) all present in the DOM; mobile sticky action bar present.
+29. Brands list shows the Official agents band first; brand detail hides empty sections (video, products).
+30. Services list uses ledger rows; detail shows numbered "What is included" ledger and process track.
+31. Contact: navy info panel + white form panel, three icon rows, socials, product chip prefill from `?product=`, success state, map facade then iframe on click; on mobile form first.
+32. News detail: 720px reading column, sticky TOC at >= 1024 when >= 3 `h2`.
+33. FAQ: accordion groups with 2px top rules and a sticky group index; 404/thank-you are the only centred layouts.
+34. Search: result rows with highlighted match (`mark` `#E0E7FF`), type labels, empty suggestions.
+
+Motion and accessibility
+35. With `prefers-reduced-motion: reduce`: no marquee animation (static grid), no counter animation, no carousel autoplay, no reveal/fade, transitions < 10ms.
+36. Every interactive element is reachable and visibly focused by keyboard; skip link works; focus moves to `h1` on navigation; no focus trap leaks.
+37. All tap targets >= 44x44 on mobile (audit); no horizontal scroll at 320px.
+38. axe-core: zero serious/critical violations on every public template at 390 and 1440; Lighthouse Accessibility >= 95.
+39. Heading order has no skipped levels on any page; each page has exactly one `h1`.
+
+Admin
+40. Sidebar 248px `#111827`, active item bar `#60A5FA`; topbar 52px; table rows 40px; base text 14px; controls 36px high; no ring motifs in the admin except logo and spinner.
+41. Status chips use icon/dot + text; SEO score uses gauge + icon + text; unsaved indicator visible when dirty; PublishBar sticky.
+42. Admin dark mode toggles tokens only (no hard-coded colours): screenshot diff shows consistent contrast (axe zero violations in `.dark`).
+
+Content/brand
+43. Copy: no banned phrases (1.3 #6); no emoji; proposed microcopy flagged in a review list is approved or replaced before launch.
+44. Logo: header uses SVG, clear space respected, white variant on navy; favicon shows ring + burgundy dot at 16px legibly.
+45. Image treatment: scrim only on text-over-photo areas; hero scrim matches 4.7; no duotone on product photos.
+46. Percent-area check (2.4): spot-check Home and Contact: navy area within +-8 percentage points of the stated ratio; burgundy area under 2%.
+
+---
+End of specification.
