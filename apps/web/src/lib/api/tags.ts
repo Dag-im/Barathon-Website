@@ -1,0 +1,22 @@
+/** Fetch cache tags. The API emits the same taxonomy (backend plan 6.1.7). */
+export const TAGS = {
+  site: "site",
+  menus: "menus",
+  page: (slug: string) => `page:${slug}`,
+  pages: "pages",
+  products: "products",
+  product: (slug: string) => `product:${slug}`,
+  categories: "categories",
+  brands: "brands",
+  brand: (slug: string) => `brand:${slug}`,
+  services: "services",
+  service: (slug: string) => `service:${slug}`,
+  videos: "videos",
+  posts: "posts",
+  post: (slug: string) => `post:${slug}`,
+  testimonials: "testimonials",
+  faqs: "faqs",
+  subsidiaries: "subsidiaries",
+  redirects: "redirects",
+  sitemap: "sitemap",
+} as const;

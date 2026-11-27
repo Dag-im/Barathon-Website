@@ -45,6 +45,23 @@ const nextConfig: NextConfig = {
       { protocol: "http", hostname: "localhost", port: "9000", pathname: "/**" },
     ],
   },
+  async redirects() {
+    // Legacy URLs from the live site (plan 5.11). The CMS redirect table is resolved at runtime in not-found.tsx.
+    const permanent = (source: string, destination: string) => ({ source, destination, permanent: true });
+    return [
+      permanent("/home", "/"),
+      permanent("/index", "/"),
+      permanent("/about-us", "/about"),
+      permanent("/aboutus", "/about"),
+      permanent("/contact-us", "/contact"),
+      permanent("/contactus", "/contact"),
+      permanent("/service", "/services"),
+      permanent("/comapny/:id", "/brands"),
+      permanent("/company/:id", "/brands"),
+      permanent("/companies/:id", "/brands"),
+      permanent("/product/:id", "/products"),
+    ];
+  },
   async rewrites() {
     return [
       {

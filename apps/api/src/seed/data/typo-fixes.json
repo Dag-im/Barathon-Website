@@ -1,0 +1,23 @@
+{
+  "description": "Exact, case-sensitive replacements applied to every seeded text. Each applied fix is written to seed-report.json.",
+  "replacements": [
+    { "find": "Bussiness", "replace": "Business" },
+    { "find": "FURKAWA", "replace": "FURUKAWA" },
+    { "find": "redictive Maintenance", "replace": "Predictive Maintenance" },
+    { "find": "has resented in the delivery", "replace": "has resulted in the delivery" },
+    { "find": "SUMITOMO construction is was formed in 1888 in Japan, With the mentality", "replace": "Sumitomo Construction was formed in 1888 in Japan, with the mentality" },
+    { "find": "Tata-Daewoo trucks spare parts", "replace": "Tata-Daewoo truck spare parts" },
+    { "find": "Walter Geratebou", "replace": "Walter Gerätebau" }
+  ],
+  "collapseWhitespace": true,
+  "countryNormalisation": {
+    "Japan": { "code": "JP", "name": "Japan" },
+    "Tokyo,Japan": { "code": "JP", "name": "Japan", "city": "Tokyo" },
+    "Saitama, Japan": { "code": "JP", "name": "Japan", "city": "Saitama" },
+    "France": { "code": "FR", "name": "France" },
+    "Germany": { "code": "DE", "name": "Germany" },
+    "Italy": { "code": "IT", "name": "Italy" },
+    "sweden": { "code": "SE", "name": "Sweden" },
+    "Ockelbo, Sweden": { "code": "SE", "name": "Sweden", "city": "Ockelbo" }
+  }
+}
