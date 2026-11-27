@@ -360,7 +360,7 @@ export async function seedAll(prisma: PrismaService, settings: SettingsService, 
   // --- pages ---------------------------------------------------------------------------
   const logo = await db.media.findFirst({ where: { originalName: 'logo.png' } });
   if (!(await db.page.findFirst({ where: { key: 'home' } }))) {
-    const page = await db.page.create({
+    await db.page.create({
       data: {
         key: 'home',
         slug: 'home',
@@ -395,7 +395,6 @@ export async function seedAll(prisma: PrismaService, settings: SettingsService, 
         },
       },
     });
-    void page;
     bump(report, 'pages');
   }
   if (!(await db.page.findFirst({ where: { key: 'about' } }))) {
@@ -490,7 +489,6 @@ export async function seedAll(prisma: PrismaService, settings: SettingsService, 
   }
 
   report.notes.push('Re-running the seed only inserts missing rows; edited rows are never overwritten.');
-  void logo;
   return report;
 }
 
@@ -511,4 +509,3 @@ export function newSeedReport(): SeedReport {
   return newReport();
 }
 
-export { ContactChannelType, MenuLocation, RedirectType };

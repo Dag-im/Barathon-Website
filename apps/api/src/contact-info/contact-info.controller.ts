@@ -8,7 +8,6 @@ import { ApiError } from '../common/utils/errors';
 import { PrismaService } from '../prisma/prisma.service';
 import { RevalidationService } from '../revalidation/revalidation.service';
 import { tagsFor } from '../common/constants/revalidation-map';
-import { parseYouTube } from '../catalogue/youtube';
 
 const MAP_HOSTS = ['www.google.com', 'maps.google.com', 'www.openstreetmap.org', 'www.google.com/maps'];
 
@@ -185,5 +184,3 @@ export class ContactInfoAdminController {
   }
 }
 
-/** Public helper: a YouTube-like validation reused for map/video links where needed. */
-export { parseYouTube, Inject };

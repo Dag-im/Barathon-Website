@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
-import { readFileSync } from 'fs';
 import { createInterface } from 'readline';
 import { AppModule } from './app.module';
 import { PrismaService } from './prisma/prisma.service';
@@ -11,7 +10,6 @@ import { SettingsService } from './settings/settings.service';
 import { NavigationService } from './navigation/navigation.service';
 import { MediaService } from './media/media.service';
 import { AppConfig, APP_CONFIG } from './config/config';
-import { RevalidationService } from './revalidation/revalidation.service';
 import { seedAll, newSeedReport, writeReport } from './seed/seed';
 import { seedAssets } from './seed/assets';
 import { resolve } from 'path';
@@ -106,8 +104,6 @@ async function main(): Promise<void> {
         const nav = app.get(NavigationService);
         const config = app.get<AppConfig>(APP_CONFIG);
         const report = newSeedReport();
-        const sourceDir = process.env.SEED_SOURCE_DIR ?? resolve(__dirname, '..', '..', '..', 'docs', 'source');
-        void sourceDir;
         await seedAll(prisma, settings, nav, passwords, audit, {
           adminEmail: config.env.ADMIN_BOOTSTRAP_EMAIL || undefined,
           adminName: 'Administrator',
@@ -124,7 +120,6 @@ async function main(): Promise<void> {
         const report = newSeedReport();
         const sourceDir = process.env.SEED_SOURCE_DIR ?? resolve(__dirname, '..', '..', '..', 'docs', 'source');
         const result = await seedAssets({ prisma, media, config }, report, sourceDir);
-        app.get(RevalidationService);
         const path = writeReport(report);
         console.log(`assets: ${result.ok} stored, ${result.failed} failed; report at ${path}`);
         break;
@@ -146,7 +141,6 @@ async function main(): Promise<void> {
         console.log('usage: cli <admin:create|admin:reset-password|admin:unlock|admin:list|seed|seed:assets|db:check> [--email ...] [--name ...] [--password-stdin]');
         process.exitCode = 1;
     }
-    void readFileSync;
   } finally {
     await app.close();
   }

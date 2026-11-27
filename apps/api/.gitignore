@@ -1,0 +1,5 @@
+dist/
+coverage/
+seed-report.json
+assets-manifest.json
+.env

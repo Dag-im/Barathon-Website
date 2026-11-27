@@ -115,7 +115,6 @@ export class MediaAdminController {
   async list(@Query(zodPipe(listQuery)) q: z.infer<typeof listQuery>) {
     const where = {
       ...MediaService.filterPrisma({ kind: q.kind, folderId: q.folderId, visibility: q.visibility, search: q.q }),
-      ...(q.unused === 'true' ? { mediaRefs: undefined } : {}),
     };
     const unusedIds = q.unused === 'true' ? await this.unusedIds() : null;
     const finalWhere = unusedIds ? { ...where, id: { in: unusedIds } } : where;
@@ -164,6 +163,10 @@ export class MediaAdminController {
       }
     }
     const failed = results.filter((r) => !r.ok).length;
+    if (results.length === 1 && failed === 1) {
+      const err = (results[0].error ?? {}) as { statusCode: number; code: string; message: string };
+      throw new ApiError(err.statusCode, err.code, err.message);
+    }
     res.status(failed === 0 ? HttpStatus.CREATED : failed === results.length ? 422 : HttpStatus.MULTI_STATUS);
     return { data: results };
   }
@@ -275,4 +278,3 @@ export class MediaAdminController {
   }
 }
 
-export { extensionOf };

@@ -74,7 +74,6 @@ export class BlocksResolver {
           const products = await this.products.cards(
             await this.db.product.findMany({ where: { ...LIVE(), isFeatured: true }, include: { brand: { select: { id: true, name: true, slug: true, logoMediaId: true } }, category: { select: { id: true, name: true, slug: true } } }, orderBy: { sortOrder: 'asc' }, take: limit }),
           );
-          const media = await this.media.resolveMany(products.map((p: any) => p.image?.id));
           slides = products.map((p: any) => ({
             id: p.id,
             eyebrow: p.category?.name ?? null,
@@ -86,7 +85,6 @@ export class BlocksResolver {
             buttons: [{ label: 'Learn more', href: p.href }],
             href: p.href,
           }));
-          void media;
         }
         return { autoplayMs: d.autoplayMs ?? 6000, showThumbnails: d.showThumbnails ?? true, showCounter: d.showCounter ?? true, slides };
       }
@@ -173,8 +171,6 @@ export class BlocksResolver {
         return { columns: d.columns ?? 3, images: ids.map((id: string) => mediaOf(map, id)).filter(Boolean) };
       }
       case 'CONTACT_STRIP': {
-        const site = await this.settings.publicCore();
-        void site;
         const channels = await this.db.contactChannel.findMany({ where: { visible: true, showOnContactPage: true }, orderBy: { sortOrder: 'asc' } });
         const offices = await this.db.office.findMany({ where: { visible: true }, orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }] });
         return { buttonLabel: d.buttonLabel ?? null, buttonHref: d.buttonHref ?? null, channels: channels.map((c: any) => ({ id: c.id, type: c.type, label: c.label, value: c.value, displayValue: c.displayValue ?? c.value })), offices: offices.map((o: any) => ({ id: o.id, name: o.name, isPrimary: o.isPrimary, city: o.city, countryName: o.countryName })) };

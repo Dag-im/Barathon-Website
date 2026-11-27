@@ -19,10 +19,7 @@ export class PagesAdminController extends CrudAdminController {
 
   @Get('by-key/:key')
   async byKey(@Param('key') key: string) {
-    const row = await this.crud.findOrFail(
-      (await (this.crud as any).db.findFirst({ where: { key }, select: { id: true } }))?.id ?? '00000000-0000-0000-0000-000000000000',
-    );
-    return this.crud.getDto(row.id);
+    return this.crud.findByKey(key);
   }
 
   @Get(':id/blocks')
@@ -94,4 +91,3 @@ export class PagesPublicController {
   }
 }
 
-export { CurrentUser, AuthUser, Req, Request, crudContext, ApiError, pageInput, pageUpdate, blockBody, PagesService, pageInput as _p, Patch, Post, Put, Delete, Get, z, Public, HttpCode, HttpStatus };

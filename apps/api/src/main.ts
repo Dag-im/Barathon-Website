@@ -7,7 +7,7 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
-import { APP_CONFIG, AppConfig } from './config/config';
+import { AppConfig } from './config/config';
 import { loadConfig } from './config/config';
 
 async function bootstrap(): Promise<void> {
@@ -51,7 +51,6 @@ async function bootstrap(): Promise<void> {
     SwaggerModule.setup('api/docs', app, doc, { jsonDocumentUrl: 'api/v1/openapi.json' });
   }
 
-  void APP_CONFIG;
   await app.listen(config.env.PORT, '0.0.0.0');
   app.get(Logger).log(`API listening on :${config.env.PORT}`);
 }

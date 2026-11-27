@@ -11,7 +11,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ApiError } from '../common/utils/errors';
 import { paged, skipTake } from '../common/utils/pagination';
 import { UI_STRING_DEFAULTS } from './defaults';
-import { RevalidationService } from '../revalidation/revalidation.service';
 
 const uiStringsBody = z.object({ items: z.array(z.object({ key: z.string().min(1).max(120), value: z.string().max(2000), locale: z.string().max(5).optional() }).strict()).min(1).max(200) }).strict();
 const KEY_PATTERN = /^[a-z0-9]+(\.[a-zA-Z0-9]+)+$/;
@@ -97,12 +96,7 @@ export class UiStringsAdminController {
 @ApiTags('public-settings')
 @Controller('public')
 export class SettingsPublicController {
-  constructor(
-    private readonly ui: UiStringService,
-    @Inject(RevalidationService) private readonly reval: RevalidationService,
-  ) {
-    void reval;
-  }
+  constructor(private readonly ui: UiStringService) {}
 
   @Public()
   @Get('ui-strings')
@@ -112,4 +106,3 @@ export class SettingsPublicController {
   }
 }
 
-export { paged, skipTake, Res, Post };

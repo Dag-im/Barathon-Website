@@ -29,6 +29,6 @@ import {
     FaqPublicController,
   ],
   providers: [PostsService, TestimonialsService, FaqService],
-  exports: [PostsService],
+  exports: [PostsService, FaqService],
 })
 export class EditorialModule {}

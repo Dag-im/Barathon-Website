@@ -3,7 +3,6 @@ import { ApiTags } from '@nestjs/swagger';
 import { PrismaService } from '../prisma/prisma.service';
 import { RevalidationLog } from '@prisma/client';
 import { ContactService } from '../contact/contact.service';
-import { PrismaClient } from '@prisma/client';
 
 type Counts = { total: number; published: number; draft: number; scheduled: number };
 
@@ -61,7 +60,6 @@ export class DashboardController {
     const lastReval = (await db.revalidationLog.findFirst({ orderBy: { createdAt: 'desc' } })) as RevalidationLog | null;
     const draftOlder = await db.product.count({ where: { status: 'DRAFT', updatedAt: { lt: new Date(Date.now() - 30 * 86_400_000) } } });
     const socialMissing = (await db.socialLink.count({ where: { visible: false } })) > 0;
-    void PrismaClient;
     return {
       counts: {
         products,

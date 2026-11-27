@@ -110,6 +110,7 @@ export class VideosService extends PublishableCrud<any> {
     }
     if (i.title !== undefined) data.title = plainText(i.title);
     if (i.description !== undefined) data.description = i.description ? plainText(i.description) : null;
+    if (i.sourceType === VideoSourceType.UPLOAD) data.sourceType = VideoSourceType.UPLOAD;
 
     if (i.url !== undefined) {
       if (existing?.sourceType === VideoSourceType.UPLOAD) {
@@ -164,9 +165,8 @@ export class VideosService extends PublishableCrud<any> {
         const p = await this.media.uploadPoster({ buffer: posterBuffer, originalName: poster?.originalname ?? 'poster.jpg' }, { ...rctx, userId: ctx.userId });
         posterId = p.id;
       }
-    } catch (err) {
+    } catch {
       // A missing poster never blocks the upload; the admin is warned in the DTO.
-      void err;
     }
     return this.create(
       {
@@ -213,7 +213,7 @@ export class VideosService extends PublishableCrud<any> {
         return;
       }
       res.status(206);
-      res.setHeader('Content-Range', `bytes ${start}-${end}`);
+      res.setHeader("Content-Range", `bytes ${start}-${end}/${total}`);
     }
     res.setHeader('Content-Length', String(end - start + 1));
     const stream = await this.storage.raw.read(target.bucket, target.key, start, end);

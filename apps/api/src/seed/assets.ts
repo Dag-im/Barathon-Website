@@ -78,14 +78,23 @@ export async function seedAssets(app: { prisma: PrismaService; media: MediaServi
   const logoPath = join(sourceDir, 'logo.png');
   if (existsSync(logoPath)) {
     const existing = await db.media.findFirst({ where: { originalName: 'logo.png' } });
-    const logoId =
-      existing?.id ??
-      (await app.media.upload({ buffer: readFileSync(logoPath), originalName: 'logo.png', intent: 'IMAGE', alt: 'Barathon Trading logo' }, { userId: null, email: null, ip: null, userAgent: null, requestId: null })).media.id;
+    let logoId = existing?.id ?? null;
+    if (!logoId) {
+      try {
+        const up = await app.media.upload({ buffer: readFileSync(logoPath), originalName: 'logo.png', intent: 'IMAGE', alt: 'Barathon Trading logo' }, { userId: null, email: null, ip: null, userAgent: null, requestId: null });
+        logoId = up.media.id;
+      } catch (err) {
+        report.assetFailures.push({ entity: 'site:logo', url: logoPath, reason: (err as Error).message });
+        failed++;
+      }
+    }
+    if (logoId) {
     await db.siteSettings.upsert({ where: { id: 'singleton' }, create: { id: 'singleton', siteName: 'Barathon Trading', brandColors: {}, headerCta: {}, search: {}, copyrightText: '', footerCredit: {}, seoDefaults: {}, analytics: {}, maintenance: {}, announcement: {}, contactForm: {}, robots: {}, sitemap: {}, logoLightMediaId: logoId }, update: { logoLightMediaId: logoId } });
     const home = await db.page.findFirst({ where: { key: 'home' }, include: { blocks: true } });
     const imageBlock = home?.blocks.find((b) => b.type === 'IMAGE_TEXT');
     if (imageBlock && !(imageBlock.data as any).imageMediaId) {
       await db.pageBlock.update({ where: { id: imageBlock.id }, data: { data: { ...(imageBlock.data as object), imageMediaId: logoId } } });
+    }
     }
   }
   return { ok, failed };

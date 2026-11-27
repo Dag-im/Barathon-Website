@@ -185,11 +185,10 @@ export abstract class PublishableCrud<Row extends BaseRow = BaseRow> {
 
   async create(input: Record<string, unknown>, ctx: CrudContext) {
     const { seo, expectedVersion: _ev, ...rest } = input as Record<string, unknown> & { seo?: SeoInput };
-    void _ev;
     const slug = await this.resolveSlug(rest, null);
     const data = await this.prepare({ ...rest, ...(slug ? { slug } : {}) }, null);
     if (this.publishable && !data.status) data.status = 'DRAFT';
-    const row = (await this.db.create({ data: { ...data, version: 1, createdById: ctx.userId, updatedById: ctx.userId } })) as Row;
+    const row = (await this.db.create({ data: { ...data, version: 1, ...this.actorColumns(ctx, true) } })) as Row;
     if (this.seoType) await this.seo.upsert(this.seoType, row.id, seo);
     await this.afterWrite(row, input, ctx);
     const mi = await this.mediaIndex(row);
@@ -207,11 +206,10 @@ export abstract class PublishableCrud<Row extends BaseRow = BaseRow> {
       throw new ApiError(409, 'VERSION_CONFLICT', 'The record was changed by someone else', [{ field: 'version', message: String(existing.version), code: 'current' }]);
     }
     const { seo, expectedVersion: _ev, ...rest } = input as Record<string, unknown> & { seo?: SeoInput };
-    void _ev;
     const slug = await this.resolveSlug(rest, existing);
     const before = await this.dto(existing);
     const data = await this.prepare({ ...rest, ...(slug ? { slug } : {}) }, existing);
-    const updated = (await this.db.update({ where: { id }, data: { ...data, version: { increment: 1 }, updatedById: ctx.userId } })) as Row;
+    const updated = (await this.db.update({ where: { id }, data: { ...data, version: { increment: 1 }, ...this.actorColumns(ctx, false) } })) as Row;
     if (this.seoType && seo !== undefined) await this.seo.upsert(this.seoType, id, seo);
     if (slug && existing.slug && slug !== existing.slug && existing.status === 'PUBLISHED') {
       await this.onSlugChanged(existing.slug, slug, updated);
@@ -310,6 +308,14 @@ export abstract class PublishableCrud<Row extends BaseRow = BaseRow> {
   }
 
   // ------------------------------------------------------------------ helpers
+
+  /** Models with actor columns (createdById/updatedById); others omit them. */
+  private static readonly ACTOR_MODELS = new Set(['product', 'brand', 'service', 'page', 'post']);
+
+  protected actorColumns(ctx: CrudContext, creating: boolean): Record<string, unknown> {
+    if (!PublishableCrud.ACTOR_MODELS.has(this.delegate)) return {};
+    return creating ? { createdById: ctx.userId, updatedById: ctx.userId } : { updatedById: ctx.userId };
+  }
 
   protected actor(ctx: CrudContext) {
     return { actorId: ctx.userId, actorEmail: ctx.email, ip: ctx.ip, userAgent: ctx.userAgent, requestId: ctx.requestId };

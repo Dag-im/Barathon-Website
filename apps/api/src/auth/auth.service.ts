@@ -231,7 +231,7 @@ export class AuthService {
     const now = new Date();
     const idle = new Date(now.getTime() + this.config.refreshIdleMs);
     const newIdle = new Date(Math.min(idle.getTime(), valid.session.absoluteExpiresAt.getTime()));
-    const created = await this.db.$transaction(async (tx) => {
+    await this.db.$transaction(async (tx) => {
       const next = await tx.refreshToken.create({
         data: { sessionId: valid.session.id, tokenHash: hash, parentId: valid.token.id, expiresAt: newIdle },
       });
@@ -245,7 +245,6 @@ export class AuthService {
       });
       return next;
     });
-    void created;
     return this.tokensFor(valid.user, valid.session.id, this.tokens.formatRefresh(valid.session.id, secret));
   }
 

@@ -46,6 +46,7 @@ export class AuthController {
   @SkipCsrf()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('login')
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Sign in with email and password' })
   async login(@Body(zodPipe(loginSchema)) body: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const { user, issued } = await this.auth.login(body, requestContext(req));
@@ -57,6 +58,7 @@ export class AuthController {
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @UseGuards(RefreshAuthGuard)
   @Post('refresh')
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Rotate the refresh token and issue new cookies' })
   async refresh(@Req() req: Request & { user: Awaited<ReturnType<AuthService['validateRefresh']>> }, @Res({ passthrough: true }) res: Response) {
     const issued = await this.auth.rotate(req.user);

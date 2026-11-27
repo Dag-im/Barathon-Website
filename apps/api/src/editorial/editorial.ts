@@ -401,13 +401,9 @@ export class FaqAdminController extends CrudAdminController {
     this.items = new SimpleCrud(prisma, 'faq', faqInput, faqInput.partial(), [{ sortOrder: 'asc' }]);
   }
   @Post(':id/faqs')
-  async addItem(@Param('id') id: string, @Body() body: unknown, @CurrentUser() user: AuthUser, @Req() req: Request) {
+  async addItem(@Param('id') id: string, @Body() body: unknown) {
     await this.crud.findOrFail(id);
-    const row = await this.items.create(body, { groupId: id });
-    void user;
-    void crudContext;
-    void req;
-    return row;
+    return this.items.create(body, { groupId: id });
   }
   @Patch(':id/faqs/:faqId')
   async patchItem(@Param('id') id: string, @Param('faqId') faqId: string, @Body() body: unknown) {
@@ -424,9 +420,8 @@ export class FaqAdminController extends CrudAdminController {
   }
   @Patch(':id/faqs/reorder')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async reorderItems(@Param('id') id: string, @Body() body: unknown): Promise<void> {
+  async reorderItems(@Param('id') _id: string, @Body() body: unknown): Promise<void> {
     const { ids } = parse(z.object({ ids: z.array(z.string().uuid()).min(1).max(200) }).strict(), body);
-    void id;
     await this.items.reorder(ids);
   }
 }
@@ -442,4 +437,3 @@ export class FaqPublicController {
   }
 }
 
-export { Put, Patch, Req };

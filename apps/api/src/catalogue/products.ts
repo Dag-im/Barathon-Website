@@ -210,7 +210,6 @@ export class ProductsService extends PublishableCrud<any> {
   async duplicate(sourceId: string, ctx: CrudContext) {
     const src = await this.getDto(sourceId);
     const { id: _id, slug: _s, status: _st, publishedAt: _p, scheduledAt: _sc, version: _v, createdAt: _c, updatedAt: _u, deletedAt: _d, seo: _seo, ...rest } = src as any;
-    void [_id, _s, _st, _p, _sc, _v, _c, _u, _d, _seo];
     return this.create({
       ...rest,
       title: `Copy of ${src.title}`.slice(0, 160),

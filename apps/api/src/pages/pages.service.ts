@@ -23,7 +23,7 @@ import { ServicesService } from '../catalogue/services';
 import { SubsidiariesService } from '../catalogue/subsidiaries';
 import { blockDefaults, blockSchemas, BLOCK_TYPES } from './block-schemas';
 import { BlocksResolver } from './blocks.resolver';
-import { ApiError as Err } from '../common/utils/errors';
+import { buildSeo } from '../catalogue/seo-public';
 
 export const pageInput = z
   .object({
@@ -130,11 +130,10 @@ export class PagesService extends PublishableCrud<any> {
   }
 
   /** Blocks supplied on create are inserted in order; a RICH_TEXT block is the default for simple pages. */
-  protected async afterWrite(row: any, input: Record<string, unknown> | null, ctx: CrudContext): Promise<void> {
+  protected async afterWrite(row: any, input: Record<string, unknown> | null): Promise<void> {
     const blocks = (input as any)?.blocks as Array<z.infer<typeof blockBody>> | undefined;
     if (blocks === undefined) return;
     await this.replaceBlocks(row.id, blocks.map((b, n) => ({ ...b, sortOrder: n })));
-    void ctx;
   }
 
   async softDelete(id: string, ctx: CrudContext): Promise<void> {
@@ -175,10 +174,7 @@ export class PagesService extends PublishableCrud<any> {
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
       deletedAt: row.deletedAt?.toISOString() ?? null,
-      warnings: blocks
-        .filter((b) => b.visible && b.type === 'FEATURED_PRODUCTS')
-        .map(() => ({ code: 'BLOCK_REFERENCES', message: 'Check that referenced products are published' }))
-        .slice(0, 0),
+      warnings: [],
     };
   }
 
@@ -297,7 +293,6 @@ export class PagesService extends PublishableCrud<any> {
     }
     const seoRow = await this.seo.forEntity(EntityType.PAGE, page.id);
     const media = await this.media.resolveMany([page.heroImageMediaId]);
-    const { buildSeo } = await import('../catalogue/seo-public');
     const seo = await buildSeo(this.prisma, {
       seo: seoRow as any,
       fallbackTitle: page.title,
@@ -328,10 +323,11 @@ export class PagesService extends PublishableCrud<any> {
     return { data: rows.map((r) => ({ slug: r.slug, title: r.title, updatedAt: r.updatedAt.toISOString() })) };
   }
 
-  /** Converts a block to an error the admin UI can show; kept for symmetry with BLOCK_INVALID. */
-  static invalid(message: string) {
-    return new Err(422, 'BLOCK_INVALID', message);
+  /** Page by system key (home, about). */
+  async findByKey(key: string) {
+    const row = await this.prisma.client.page.findFirst({ where: { key } });
+    if (!row) throw ApiError.notFound('Page');
+    return this.getDto(row.id);
   }
 }
 
-export { BrandsService, ProductsReadService, VideosReadService, ServicesService, SubsidiariesService };
